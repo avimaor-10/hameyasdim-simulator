@@ -989,12 +989,15 @@
       const isSigner = nid && allSignedOwners.some(s => normalizeId(s.id_number) === nid);
 
       lots.forEach(l => {
+        const area = +l.allocated_area || 0;
+        // דלג על הקצאות ריקות / לא תקפות (למשל נתונים ישנים מלפני תיקון הבאג)
+        if (area <= 0) return;
         if (!contributorsByLot[l.lot_id]) contributorsByLot[l.lot_id] = [];
         contributorsByLot[l.lot_id].push({
           userId: sel.user_id,
           name: profile.full_name || 'משתמש לא ידוע',
           approval_status: profile.approval_status,
-          area: +l.allocated_area || 0,
+          area,
           sharePercent: +l.share_percent || 0,
           sourceBlock,
           sourceParcel,

@@ -2295,14 +2295,16 @@
     document.getElementById('combination-card').style.display = 'block';
 
     // ===== שמירת המצב הנוכחי לשימוש בכפתור "שמור בחירה" =====
+    // סינון הקצאות שלא קיבלו שטח (0 מ"ר) — אין טעם לשמור אותן
     window.__lastSelection = {
-      selected_lots: allocations.map(a => ({
+      selected_lots: allocations.filter(a => (+a.allocated || 0) > 0).map(a => ({
         lot_id: a.lot.id,
-        lot_area: a.lot.area,
+        lot_area: a.lot.requiredIncomingArea,
         lot_units: a.lot.units,
-        allocated_area: a.allocatedArea,
+        lot_rental_units: a.lot.rentalUnits,
+        allocated_area: a.allocated,
         share_percent: a.sharePercent,
-        share_value: a.lotValue,
+        share_value: (a.lot.outgoingValue || 0) * a.sharePercent,
       })),
       input_block: Number(document.getElementById('block').value) || null,
       input_parcel: Number(document.getElementById('parcel').value) || null,
