@@ -190,6 +190,12 @@
 </head>
 <body>
 
+<div style="background:#1a3a5c; padding:8px 20px; text-align:right; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+  <a href="https://hameyasdim.co.il/#landowners" style="color:#c9a961; text-decoration:none; font-size:0.9rem; font-weight:500;">
+    ← חזרה לאתר רובע המייסדים
+  </a>
+</div>
+
 <div class="pending-card" id="pending-card">
   <div class="loading" id="loading-state">
     <div class="spinner"></div>
@@ -224,6 +230,52 @@
     }
   } else {
     renderPending(user.profile);
+    // בדיקה אוטומטית כל 15 שניות — האם האדמין אישר את המשתמש?
+    startApprovalPolling(user.profile.id);
+  }
+
+  // בדיקה אוטומטית של שינוי סטטוס — אם אושר, מעבירים לסימולטור עם הודעת הצלחה
+  function startApprovalPolling(userId) {
+    const POLL_INTERVAL = 15_000; // 15 שניות
+    const pollId = setInterval(async () => {
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('approval_status, role')
+          .eq('id', userId)
+          .single();
+
+        if (error || !profile) return;
+
+        // אושר! עצור את הבדיקה והצג הודעת הצלחה ואז הפנה
+        if (profile.approval_status === 'approved') {
+          clearInterval(pollId);
+          showApprovedAnimation();
+          setTimeout(() => {
+            window.location.href = profile.role === 'admin' ? 'admin.html' : 'index.html';
+          }, 2500);
+        }
+        // אם נדחה בינתיים — רענן את הדף כדי להציג את הסיבה
+        else if (profile.approval_status === 'rejected') {
+          clearInterval(pollId);
+          location.reload();
+        }
+      } catch (e) {
+        console.warn('שגיאת polling:', e);
+      }
+    }, POLL_INTERVAL);
+  }
+
+  function showApprovedAnimation() {
+    card.innerHTML = `
+      <div class="icon-circle" style="background:#d1fae5; font-size:3.5rem;">✅</div>
+      <h1 style="color:var(--success);">הבקשה אושרה!</h1>
+      <p class="lead">
+        מנהל המערכת אישר את בקשתך.<br>
+        <strong>מעביר אותך לסימולטור תוך רגע...</strong>
+      </p>
+      <div class="spinner" style="margin:20px auto;"></div>
+    `;
   }
 
   function renderPending(profile) {
@@ -288,7 +340,7 @@
           <ul>
             <li>הצוות שלנו יבדוק את פרטיך ואת נסח הטאבו שהעלית</li>
             <li>נוודא שאתה רשום כבעל זכויות בחלקה שציינת</li>
-            <li>לאחר האישור — תקבל הודעת מייל עם גישה מלאה לסימולטור</li>
+            <li><strong>ברגע שהבקשה תאושר — הדף הזה יעבור אוטומטית לסימולטור</strong> (אין צורך לרענן)</li>
             <li>תהליך האישור בדרך כלל אורך 1-2 ימי עסקים</li>
           </ul>
         </div>
@@ -296,14 +348,14 @@
 
       <div class="contact-info">
         לבירורים: <strong>קבוצת חנן מור · מתחם המייסדים נס ציונה</strong><br>
-        טלפון: <strong>03-XXXXXXX</strong> · אימייל: <strong>info@hameyasdim.co.il</strong>
+        טלפון: <strong>054-4284003</strong> · אימייל: <strong>hameyasdim@morenadlan.com</strong>
       </div>
 
-      <button id="refresh-btn">🔄 בדוק שוב</button>
+      <button id="refresh-btn">🔄 בדוק עכשיו</button>
       <button class="btn-secondary" id="logout-btn">התנתק</button>
 
       <div class="refresh-note">
-        ברגע שהבקשה תאושר — לחץ על "בדוק שוב" או התחבר מחדש
+        🔄 הדף נבדק אוטומטית כל 15 שניות — ברגע שתאושר, תועבר אוטומטית לסימולטור
       </div>
     `;
 
