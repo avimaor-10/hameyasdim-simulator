@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>דשבורד אדמין | סימולטור עסקת קומבינציה</title>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --primary-light: #2c5f94;
+    --accent: #c9a961;
+    --success: #2d7a3e;
+    --success-light: #d1fae5;
+    --danger: #dc2626;
+    --danger-light: #fee2e2;
+    --warning: #d97706;
+    --warning-light: #fff4e0;
+    --bg: #f7f5f0;
+    --card: #ffffff;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+  .topbar {
+    background: var(--primary);
+    color: white;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .topbar h1 {
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+  .topbar h1 .badge-admin {
+    background: var(--accent);
+    color: var(--primary);
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 8px;
+    font-weight: 700;
+  }
+  .topbar-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-size: 0.9rem;
+  }
+  .topbar-actions a, .topbar-actions button {
+    color: white;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 14px;
+    border-radius: 6px;
+    text-decoration: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+  }
+  .topbar-actions a:hover, .topbar-actions button:hover {
+    background: rgba(255,255,255,0.2);
+  }
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 18px 20px;
+    border-top: 4px solid var(--primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .stat-card.pending { border-top-color: var(--warning); }
+  .stat-card.approved { border-top-color: var(--success); }
+  .stat-card.rejected { border-top-color: var(--danger); }
+  .stat-card .label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .filters-bar {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .filters-bar input, .filters-bar select {
+    padding: 8px 12px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.92rem;
+    font-family: inherit;
+  }
+  .filters-bar input:focus, .filters-bar select:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+  .filters-bar input[type="text"] { min-width: 240px; }
+
+  .table-wrap {
+    background: var(--card);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  thead {
+    background: #f9fafb;
+    border-bottom: 2px solid var(--border);
+  }
+  th {
+    padding: 12px 14px;
+    text-align: right;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+  td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tr:hover { background: #fafafa; }
+
+  .status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .status-pending { background: var(--warning-light); color: #92400e; }
+  .status-approved { background: var(--success-light); color: #065f46; }
+  .status-rejected { background: var(--danger-light); color: #991b1b; }
+  .role-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .role-admin { background: var(--primary); color: white; }
+  .role-user { background: #e5e7eb; color: var(--text-muted); }
+
+  .actions-cell {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .btn-sm {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .btn-approve { background: var(--success); color: white; }
+  .btn-approve:hover { background: #1f5c30; }
+  .btn-reject { background: var(--danger); color: white; }
+  .btn-reject:hover { background: #b91c1c; }
+  .btn-view { background: var(--primary); color: white; }
+  .btn-view:hover { background: var(--primary-light); }
+  .btn-tabu { background: var(--accent); color: var(--primary); }
+  .btn-tabu:hover { background: #b8994f; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+  .loading-row td {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+  }
+  .spinner {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    border: 3px solid #e5e7eb;
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* מודאל פרטים */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 28px 32px;
+    width: 100%;
+    max-width: 640px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  }
+  .modal h2 {
+    font-size: 1.2rem;
+    color: var(--primary);
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border);
+  }
+  .modal-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.93rem;
+  }
+  .modal-row .label { color: var(--text-muted); font-weight: 500; }
+  .modal-row .value { font-weight: 600; }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .modal textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.92rem;
+    margin-top: 10px;
+    min-height: 70px;
+    resize: vertical;
+  }
+  .modal-section-title {
+    font-weight: 600;
+    color: var(--primary);
+    margin-top: 20px;
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>
+    <span class="badge-admin">ADMIN</span>
+    דשבורד ניהול · מתחם המייסדים
+  </h1>
+  <div class="topbar-actions">
+    <span id="admin-name" style="opacity:0.85;"></span>
+    <a href="matching.html">🔗 כלי חיבור בעלים</a>
+    <a href="index.html">📊 פתח סימולטור</a>
+    <button id="logout-btn">התנתק</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="stats-grid" id="stats-grid">
+    <div class="stat-card">
+      <div class="label">סה"כ משתמשים</div>
+      <div class="value" id="stat-total">-</div>
+    </div>
+    <div class="stat-card pending">
+      <div class="label">ממתינים לאישור</div>
+      <div class="value" id="stat-pending">-</div>
+    </div>
+    <div class="stat-card approved">
+      <div class="label">מאושרים</div>
+      <div class="value" id="stat-approved">-</div>
+    </div>
+    <div class="stat-card rejected">
+      <div class="label">נדחו</div>
+      <div class="value" id="stat-rejected">-</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">בחירות שמורות</div>
+      <div class="value" id="stat-selections">-</div>
+    </div>
+  </div>
+
+  <div class="filters-bar">
+    <input type="text" id="search-input" placeholder="🔍 חיפוש לפי שם, אימייל או ת.ז...">
+    <select id="status-filter">
+      <option value="">כל הסטטוסים</option>
+      <option value="pending">ממתינים לאישור</option>
+      <option value="approved">מאושרים</option>
+      <option value="rejected">נדחו</option>
+    </select>
+    <select id="role-filter">
+      <option value="">כל התפקידים</option>
+      <option value="user">משתמש</option>
+      <option value="admin">אדמין</option>
+    </select>
+    <button id="refresh-btn" class="btn-sm btn-view">🔄 רענן</button>
+  </div>
+
+  <div class="table-wrap">
+    <table id="users-table">
+      <thead>
+        <tr>
+          <th>שם מלא</th>
+          <th>אימייל</th>
+          <th>טלפון</th>
+          <th>ת.ז.</th>
+          <th>חלקה</th>
+          <th>סטטוס</th>
+          <th>תפקיד</th>
+          <th>הרשמה</th>
+          <th>פעולות</th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody">
+        <tr class="loading-row">
+          <td colspan="9"><div class="spinner"></div><div style="margin-top:8px;">טוען משתמשים...</div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- מודאל פרטי משתמש -->
+<div class="modal-overlay" id="user-modal">
+  <div class="modal" id="user-modal-content">
+    <!-- תוכן מוזרק דינמית -->
+  </div>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, logout } from './supabase-config.js';
+
+  // אימות — רק אדמין מאושר
+  const currentAdmin = await requireAuth({ requireAdmin: true });
+  if (!currentAdmin) throw new Error('Not admin');
+
+  document.getElementById('admin-name').textContent = '👤 ' + currentAdmin.profile.full_name;
+  document.getElementById('logout-btn').addEventListener('click', logout);
+
+  let allUsers = [];
+  let allParcels = {};
+
+  async function loadData() {
+    const tbody = document.getElementById('users-tbody');
+    tbody.innerHTML = `<tr class="loading-row"><td colspan="9"><div class="spinner"></div></td></tr>`;
+
+    // טעינה במקביל
+    const [usersRes, parcelsRes, selectionsRes] = await Promise.all([
+      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+      supabase.from('user_parcels').select('*'),
+      supabase.from('selections').select('id', { count: 'exact', head: true }),
+    ]);
+
+    if (usersRes.error) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#dc2626;padding:40px;">שגיאה בטעינה: ${usersRes.error.message}</td></tr>`;
+      return;
+    }
+
+    allUsers = usersRes.data || [];
+
+    // קיבוץ חלקות לפי user_id
+    allParcels = {};
+    (parcelsRes.data || []).forEach(p => {
+      if (!allParcels[p.user_id]) allParcels[p.user_id] = [];
+      allParcels[p.user_id].push(p);
+    });
+
+    updateStats(selectionsRes.count || 0);
+    renderTable();
+  }
+
+  function updateStats(selectionsCount) {
+    document.getElementById('stat-total').textContent = allUsers.length;
+    document.getElementById('stat-pending').textContent = allUsers.filter(u => u.approval_status === 'pending').length;
+    document.getElementById('stat-approved').textContent = allUsers.filter(u => u.approval_status === 'approved').length;
+    document.getElementById('stat-rejected').textContent = allUsers.filter(u => u.approval_status === 'rejected').length;
+    document.getElementById('stat-selections').textContent = selectionsCount;
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('users-tbody');
+    const search = document.getElementById('search-input').value.trim().toLowerCase();
+    const status = document.getElementById('status-filter').value;
+    const role = document.getElementById('role-filter').value;
+
+    let filtered = allUsers;
+    if (search) {
+      filtered = filtered.filter(u =>
+        (u.full_name || '').toLowerCase().includes(search) ||
+        (u.email || '').toLowerCase().includes(search) ||
+        (u.id_number || '').toLowerCase().includes(search)
+      );
+    }
+    if (status) filtered = filtered.filter(u => u.approval_status === status);
+    if (role) filtered = filtered.filter(u => u.role === role);
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-state">אין משתמשים להצגה</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(u => {
+      const parcels = allParcels[u.id] || [];
+      const parcelStr = parcels.length
+        ? parcels.map(p => `${p.block}/${p.parcel} (${p.area_owned} מ"ר)`).join(', ')
+        : '<span style="color:#9ca3af;">-</span>';
+
+      const createdDate = u.created_at
+        ? new Date(u.created_at).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
+        : '-';
+
+      return `
+        <tr>
+          <td><strong>${u.full_name || '-'}</strong></td>
+          <td style="direction:ltr;text-align:right;font-size:0.85rem;">${u.email || '-'}</td>
+          <td style="direction:ltr;text-align:right;">${u.phone || '-'}</td>
+          <td>${u.id_number || '-'}</td>
+          <td style="font-size:0.85rem;">${parcelStr}</td>
+          <td><span class="status-badge status-${u.approval_status}">${statusLabel(u.approval_status)}</span></td>
+          <td><span class="role-badge role-${u.role}">${u.role === 'admin' ? 'אדמין' : 'משתמש'}</span></td>
+          <td style="font-size:0.82rem;color:#6b7280;">${createdDate}</td>
+          <td>
+            <div class="actions-cell">
+              <button class="btn-sm btn-view" data-action="view" data-id="${u.id}">פרטים</button>
+              ${u.approval_status !== 'approved' ? `<button class="btn-sm btn-approve" data-action="approve" data-id="${u.id}">✓ אשר</button>` : ''}
+              ${u.approval_status !== 'rejected' ? `<button class="btn-sm btn-reject" data-action="reject" data-id="${u.id}">✗ דחה</button>` : ''}
+              ${u.tabu_file_url ? `<button class="btn-sm btn-tabu" data-action="tabu" data-id="${u.id}">📄 טאבו</button>` : ''}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // מאזיני פעולות
+    tbody.querySelectorAll('button[data-action]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const action = btn.dataset.action;
+        const userId = btn.dataset.id;
+        const user = allUsers.find(u => u.id === userId);
+        if (!user) return;
+
+        if (action === 'view') openUserModal(user);
+        else if (action === 'approve') await approveUser(user);
+        else if (action === 'reject') await rejectUser(user);
+        else if (action === 'tabu') await openTabuFile(user);
+      });
+    });
+  }
+
+  function statusLabel(s) {
+    return s === 'pending' ? 'ממתין' : s === 'approved' ? 'מאושר' : 'נדחה';
+  }
+
+  async function approveUser(user) {
+    if (!confirm(`האם לאשר את ${user.full_name}?`)) return;
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        approval_status: 'approved',
+        approved_by: currentAdmin.profile.id,
+        approved_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+
+    if (error) { alert('שגיאה: ' + error.message); return; }
+
+    await supabase.from('admin_access_log').insert({
+      admin_id: currentAdmin.profile.id,
+      user_id: user.id,
+      action: 'approve',
+      notes: 'אישור רישום',
+    });
+
+    await loadData();
+    alert('✅ המשתמש אושר');
+  }
+
+  async function rejectUser(user) {
+    const reason = prompt(`דחיית ${user.full_name}. סיבה (תוצג למשתמש):`, '');
+    if (reason === null) return;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        approval_status: 'rejected',
+        admin_notes: reason || 'הבקשה נדחתה',
+        approved_by: currentAdmin.profile.id,
+        approved_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+
+    if (error) { alert('שגיאה: ' + error.message); return; }
+
+    await supabase.from('admin_access_log').insert({
+      admin_id: currentAdmin.profile.id,
+      user_id: user.id,
+      action: 'reject',
+      notes: reason,
+    });
+
+    await loadData();
+  }
+
+  async function openTabuFile(user) {
+    if (!user.tabu_file_url) { alert('אין קובץ טאבו'); return; }
+    // יצירת signed URL לקובץ פרטי
+    const { data, error } = await supabase.storage
+      .from('tabu-files')
+      .createSignedUrl(user.tabu_file_url, 300); // 5 דקות
+
+    if (error) { alert('שגיאה בפתיחת קובץ: ' + error.message); return; }
+
+    await supabase.from('admin_access_log').insert({
+      admin_id: currentAdmin.profile.id,
+      user_id: user.id,
+      action: 'view_tabu',
+    });
+
+    window.open(data.signedUrl, '_blank');
+  }
+
+  function openUserModal(user) {
+    const parcels = allParcels[user.id] || [];
+    const parcelsHtml = parcels.length ? parcels.map(p =>
+      `<div class="modal-row"><span class="label">גוש ${p.block} חלקה ${p.parcel}:</span><span class="value">${p.area_owned} מ"ר</span></div>`
+    ).join('') : '<div style="color:#9ca3af;padding:8px 0;">לא הוזנו חלקות</div>';
+
+    const createdDate = user.created_at ? new Date(user.created_at).toLocaleString('he-IL') : '-';
+    const approvedDate = user.approved_at ? new Date(user.approved_at).toLocaleString('he-IL') : '-';
+
+    document.getElementById('user-modal-content').innerHTML = `
+      <h2>👤 ${user.full_name}</h2>
+
+      <div class="modal-section-title">פרטים אישיים</div>
+      <div class="modal-row"><span class="label">אימייל:</span><span class="value" style="direction:ltr;">${user.email || '-'}</span></div>
+      <div class="modal-row"><span class="label">טלפון:</span><span class="value" style="direction:ltr;">${user.phone || '-'}</span></div>
+      <div class="modal-row"><span class="label">ת.ז.:</span><span class="value">${user.id_number || '-'}</span></div>
+
+      <div class="modal-section-title">סטטוס</div>
+      <div class="modal-row"><span class="label">סטטוס אישור:</span><span class="value"><span class="status-badge status-${user.approval_status}">${statusLabel(user.approval_status)}</span></span></div>
+      <div class="modal-row"><span class="label">תפקיד:</span><span class="value"><span class="role-badge role-${user.role}">${user.role === 'admin' ? 'אדמין' : 'משתמש'}</span></span></div>
+      <div class="modal-row"><span class="label">נרשם:</span><span class="value" style="font-size:0.85rem;">${createdDate}</span></div>
+      ${user.approved_at ? `<div class="modal-row"><span class="label">אושר/נדחה:</span><span class="value" style="font-size:0.85rem;">${approvedDate}</span></div>` : ''}
+
+      <div class="modal-section-title">חלקות בבעלות</div>
+      ${parcelsHtml}
+
+      ${user.tabu_file_url ? `
+        <div class="modal-section-title">נסח טאבו</div>
+        <button class="btn-sm btn-tabu" id="modal-tabu-btn">📄 פתח קובץ טאבו</button>
+      ` : ''}
+
+      ${user.admin_notes ? `
+        <div class="modal-section-title">הערות אדמין</div>
+        <div style="background:#f9fafb;padding:10px;border-radius:6px;">${user.admin_notes}</div>
+      ` : ''}
+
+      <div class="modal-section-title">שינוי הערות / תפקיד</div>
+      <textarea id="modal-notes" placeholder="הערות על המשתמש...">${user.admin_notes || ''}</textarea>
+
+      <div class="modal-actions">
+        ${user.approval_status !== 'approved' ? `<button class="btn-sm btn-approve" id="modal-approve-btn">✓ אשר משתמש</button>` : ''}
+        ${user.approval_status !== 'rejected' ? `<button class="btn-sm btn-reject" id="modal-reject-btn">✗ דחה משתמש</button>` : ''}
+        ${user.role !== 'admin' ? `<button class="btn-sm btn-view" id="modal-make-admin-btn" style="background:#c9a961;color:#1a3a5c;">👑 הפוך לאדמין</button>` : ''}
+        <button class="btn-sm btn-view" id="modal-save-notes-btn">💾 שמור הערות</button>
+        <button class="btn-sm" id="modal-close-btn" style="background:#e5e7eb;color:#1f2937;">סגור</button>
+      </div>
+    `;
+
+    document.getElementById('user-modal').classList.add('visible');
+
+    document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+    document.getElementById('modal-save-notes-btn')?.addEventListener('click', async () => {
+      const notes = document.getElementById('modal-notes').value.trim();
+      const { error } = await supabase.from('profiles').update({ admin_notes: notes }).eq('id', user.id);
+      if (error) { alert('שגיאה: ' + error.message); return; }
+      alert('הערות נשמרו');
+      closeModal();
+      await loadData();
+    });
+    document.getElementById('modal-approve-btn')?.addEventListener('click', async () => {
+      closeModal();
+      await approveUser(user);
+    });
+    document.getElementById('modal-reject-btn')?.addEventListener('click', async () => {
+      closeModal();
+      await rejectUser(user);
+    });
+    document.getElementById('modal-make-admin-btn')?.addEventListener('click', async () => {
+      if (!confirm(`⚠️ הפיכת ${user.full_name} לאדמין — תהיה לו גישה מלאה לכל המשתמשים. להמשיך?`)) return;
+      const { error } = await supabase.from('profiles').update({
+        role: 'admin',
+        approval_status: 'approved',
+      }).eq('id', user.id);
+      if (error) { alert('שגיאה: ' + error.message); return; }
+      alert('✅ הופך לאדמין');
+      closeModal();
+      await loadData();
+    });
+    document.getElementById('modal-tabu-btn')?.addEventListener('click', () => openTabuFile(user));
+  }
+
+  function closeModal() {
+    document.getElementById('user-modal').classList.remove('visible');
+  }
+
+  // סגירת מודאל בלחיצה מחוץ
+  document.getElementById('user-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'user-modal') closeModal();
+  });
+
+  // אירועי מסננים
+  document.getElementById('search-input').addEventListener('input', renderTable);
+  document.getElementById('status-filter').addEventListener('change', renderTable);
+  document.getElementById('role-filter').addEventListener('change', renderTable);
+  document.getElementById('refresh-btn').addEventListener('click', loadData);
+
+  // טעינה ראשונית
+  await loadData();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>הרשמה | סימולטור עסקת קומבינציה ושיתוף</title>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --primary-light: #2c5f94;
+    --accent: #c9a961;
+    --success: #2d7a3e;
+    --danger: #dc2626;
+    --warning: #b8860b;
+    --bg: #f7f5f0;
+    --card: #ffffff;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+    background: linear-gradient(135deg, #f7f5f0 0%, #e6f0ff 100%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+    line-height: 1.6;
+  }
+  .auth-card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+    padding: 36px;
+    width: 100%;
+    max-width: 560px;
+    margin: 20px auto;
+    border-top: 5px solid var(--accent);
+  }
+  .brand {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .brand h1 {
+    font-size: 1.3rem;
+    color: var(--primary);
+    margin-bottom: 4px;
+    font-weight: 700;
+  }
+  .brand .subtitle {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  h2 {
+    font-size: 1.15rem;
+    color: var(--primary);
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .section-title {
+    font-size: 0.85rem;
+    color: var(--primary);
+    font-weight: 700;
+    margin: 20px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--accent);
+  }
+  .field { margin-bottom: 14px; }
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
+  .field label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    font-weight: 500;
+  }
+  .field label .required { color: var(--danger); }
+  .field input, .field select {
+    width: 100%;
+    padding: 11px 12px;
+    border: 2px solid var(--border);
+    border-radius: 7px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    background: white;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+  .field small {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  .file-field {
+    padding: 14px;
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    text-align: center;
+    background: #f9fafe;
+    cursor: pointer;
+  }
+  .file-field:hover { border-color: var(--accent); }
+  .file-field input { display: none; }
+  .file-field-label { color: var(--text-muted); font-size: 0.9rem; }
+  .file-field.has-file { border-color: var(--success); background: #e8f5eb; }
+  .file-field.has-file .file-field-label { color: var(--success); font-weight: 600; }
+  .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background: #f9fafe;
+    border-radius: 6px;
+  }
+  .checkbox-field input { width: 18px; height: 18px; }
+  button.primary {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-family: inherit;
+    margin-top: 14px;
+  }
+  button.primary:hover:not(:disabled) { background: var(--primary-light); }
+  button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .error-msg {
+    background: #fee2e2;
+    color: #7f1d1d;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border-right: 4px solid var(--danger);
+    font-size: 0.88rem;
+    margin-top: 12px;
+    display: none;
+  }
+  .error-msg.visible { display: block; }
+  .success-msg {
+    background: #e8f5eb;
+    color: #1a4220;
+    padding: 14px;
+    border-radius: 8px;
+    border-right: 4px solid var(--success);
+    font-size: 0.95rem;
+    margin-top: 12px;
+    display: none;
+  }
+  .success-msg.visible { display: block; }
+  .bottom-link {
+    text-align: center;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .bottom-link a {
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .bottom-link a:hover { text-decoration: underline; }
+  .info-note {
+    background: #fef3c7;
+    color: #78350f;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border-right: 4px solid var(--warning);
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<div class="auth-card">
+  <div class="brand">
+    <h1>סימולטור עסקת קומבינציה ושיתוף</h1>
+    <div class="subtitle">מתחם המייסדים · נס ציונה · תמ"ל 3010</div>
+  </div>
+
+  <h2>📝 הרשמה לחשבון חדש</h2>
+
+  <div class="info-note">
+    🛡️ <strong>שים לב:</strong> חשבונות חדשים דורשים אישור של מנהל המערכת לפני שניתן להיכנס לסימולטור.
+    ההרשמה שלך תיבדק מול דו"ח השמאי של תמ"ל 3010 ורשימת בעלי הקרקע הרשומים.
+  </div>
+
+  <form id="register-form">
+
+    <div class="section-title">פרטים אישיים</div>
+    <div class="field">
+      <label for="full_name">שם מלא <span class="required">*</span></label>
+      <input type="text" id="full_name" required placeholder="ישראל ישראלי" />
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="email">אימייל <span class="required">*</span></label>
+        <input type="email" id="email" required placeholder="your@email.com" />
+      </div>
+      <div class="field">
+        <label for="phone">טלפון נייד</label>
+        <input type="tel" id="phone" placeholder="050-1234567" />
+      </div>
+    </div>
+    <div class="field">
+      <label for="id_number">תעודת זהות</label>
+      <input type="text" id="id_number" placeholder="9 ספרות" maxlength="9" />
+      <small>לא חובה — עוזר לנו לאמת מול דו"ח השמאי</small>
+    </div>
+
+    <div class="section-title">סיסמה</div>
+    <div class="field-row">
+      <div class="field">
+        <label for="password">סיסמה <span class="required">*</span></label>
+        <input type="password" id="password" required minlength="6" autocomplete="new-password" />
+        <small>לפחות 6 תווים</small>
+      </div>
+      <div class="field">
+        <label for="password_confirm">אימות סיסמה <span class="required">*</span></label>
+        <input type="password" id="password_confirm" required minlength="6" autocomplete="new-password" />
+      </div>
+    </div>
+
+    <div class="section-title">פרטי החלקה שלך</div>
+    <div class="field-row">
+      <div class="field">
+        <label for="block">גוש</label>
+        <input type="number" id="block" value="3852" />
+      </div>
+      <div class="field">
+        <label for="parcel">מספר חלקה</label>
+        <input type="number" id="parcel" placeholder="לדוגמה: 17" />
+      </div>
+    </div>
+    <div class="field">
+      <label for="area_owned">שטח בבעלותך (מ"ר)</label>
+      <input type="number" id="area_owned" placeholder="לדוגמה: 5000" min="1" />
+      <small>ניתן להוסיף / לתקן בהמשך באזור האישי</small>
+    </div>
+
+    <div class="section-title">אימות בעלות (מומלץ)</div>
+    <div class="field">
+      <label class="file-field" id="tabu-label">
+        <input type="file" id="tabu_file" accept="application/pdf,image/*" />
+        <div class="file-field-label" id="tabu-label-text">📎 העלה נסח טאבו (PDF / תמונה)</div>
+      </label>
+      <small>לא חובה בהרשמה — ניתן להעלות בהמשך באזור האישי</small>
+    </div>
+
+    <div class="field">
+      <label class="checkbox-field">
+        <input type="checkbox" id="signed_with_mor" />
+        <span>אני כבר חתום על הסכם ניהול עם קבוצת חנן מור</span>
+      </label>
+    </div>
+
+    <button type="submit" class="primary" id="submit-btn">🚀 צור חשבון</button>
+
+    <div class="error-msg" id="error-msg"></div>
+    <div class="success-msg" id="success-msg"></div>
+  </form>
+
+  <div class="bottom-link">
+    יש לך כבר חשבון? <a href="login.html">כניסה</a>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase, getCurrentUser } from './supabase-config.js';
+
+  // אם כבר מחובר — הפניה החוצה
+  const currentUser = await getCurrentUser();
+  if (currentUser) {
+    window.location.href = currentUser.profile?.approval_status === 'approved'
+      ? 'index.html' : 'pending.html';
+  }
+
+  // הצגת שם הקובץ שנבחר
+  const tabuInput = document.getElementById('tabu_file');
+  const tabuLabel = document.getElementById('tabu-label');
+  const tabuLabelText = document.getElementById('tabu-label-text');
+  tabuInput.addEventListener('change', () => {
+    if (tabuInput.files && tabuInput.files[0]) {
+      tabuLabel.classList.add('has-file');
+      tabuLabelText.textContent = '✓ ' + tabuInput.files[0].name;
+    } else {
+      tabuLabel.classList.remove('has-file');
+      tabuLabelText.textContent = '📎 העלה נסח טאבו (PDF / תמונה)';
+    }
+  });
+
+  const form = document.getElementById('register-form');
+  const errorMsg = document.getElementById('error-msg');
+  const successMsg = document.getElementById('success-msg');
+  const submitBtn = document.getElementById('submit-btn');
+
+  function showError(msg) {
+    errorMsg.textContent = '❌ ' + msg;
+    errorMsg.classList.add('visible');
+    successMsg.classList.remove('visible');
+    submitBtn.disabled = false;
+    submitBtn.textContent = '🚀 צור חשבון';
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorMsg.classList.remove('visible');
+    successMsg.classList.remove('visible');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'יוצר חשבון...';
+
+    const fullName = document.getElementById('full_name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const idNumber = document.getElementById('id_number').value.trim();
+    const password = document.getElementById('password').value;
+    const passwordConfirm = document.getElementById('password_confirm').value;
+    const block = parseInt(document.getElementById('block').value) || 3852;
+    const parcel = parseInt(document.getElementById('parcel').value) || null;
+    const areaOwned = parseFloat(document.getElementById('area_owned').value) || null;
+    const signedWithMor = document.getElementById('signed_with_mor').checked;
+    const tabuFile = tabuInput.files[0];
+
+    // ולידציות
+    if (password !== passwordConfirm) return showError('הסיסמאות לא תואמות');
+    if (password.length < 6) return showError('הסיסמה חייבת להיות לפחות 6 תווים');
+
+    // יצירת חשבון במערכת האימות של Supabase
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          phone: phone || null,
+          id_number: idNumber || null,
+        },
+      },
+    });
+
+    if (error) {
+      let msg = error.message;
+      if (msg.includes('already registered')) msg = 'אימייל זה כבר רשום במערכת. נסה להיכנס.';
+      else if (msg.includes('Password')) msg = 'הסיסמה חלשה מדי. בחר סיסמה חזקה יותר.';
+      return showError(msg);
+    }
+
+    const userId = data.user?.id;
+    if (!userId) return showError('שגיאה ביצירת המשתמש — נסה שוב.');
+
+    // המתנה קצרה — הטריגר יוצר את הפרופיל אוטומטית
+    await new Promise(r => setTimeout(r, 1500));
+
+    // עדכון מערכת אם מסומן "חתום עם מור"
+    if (signedWithMor) {
+      await supabase.from('profiles').update({
+        admin_notes: '🟢 סימן בהרשמה: חתום על הסכם ניהול עם קבוצת חנן מור'
+      }).eq('id', userId);
+    }
+
+    // הוספת חלקה (אם הוזן)
+    if (parcel && areaOwned) {
+      const { error: parcelError } = await supabase.from('user_parcels').insert({
+        user_id: userId, block, parcel, area_owned: areaOwned
+      });
+      if (parcelError) console.error('שגיאה בהוספת חלקה:', parcelError);
+    }
+
+    // העלאת נסח טאבו (אם סופק)
+    if (tabuFile) {
+      const ext = tabuFile.name.split('.').pop();
+      const filePath = `${userId}/tabu.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('tabu-files')
+        .upload(filePath, tabuFile, { upsert: true });
+
+      if (uploadError) {
+        console.error('שגיאה בהעלאת טאבו:', uploadError);
+      } else {
+        await supabase.from('profiles')
+          .update({ tabu_file_url: filePath })
+          .eq('id', userId);
+      }
+    }
+
+    // הצלחה!
+    successMsg.innerHTML = `✅ <strong>ההרשמה הושלמה!</strong><br>
+      החשבון שלך ממתין לאישור מנהל. בעוד רגע תועבר למסך ההמתנה.`;
+    successMsg.classList.add('visible');
+    submitBtn.textContent = 'מעביר...';
+
+    setTimeout(() => {
+      window.location.href = 'pending.html';
+    }, 2500);
+  });
+</script>
+
+</body>
+</html>

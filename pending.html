@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ממתין לאישור | סימולטור עסקת קומבינציה</title>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --primary-light: #2c5f94;
+    --accent: #c9a961;
+    --success: #2d7a3e;
+    --danger: #dc2626;
+    --warning: #d97706;
+    --bg: #f7f5f0;
+    --card: #ffffff;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+    background: linear-gradient(135deg, #f7f5f0 0%, #fff4e0 100%);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    line-height: 1.6;
+  }
+  .pending-card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+    padding: 44px 40px;
+    width: 100%;
+    max-width: 560px;
+    border-top: 5px solid var(--warning);
+    text-align: center;
+  }
+  .icon-circle {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: #fff4e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 2.8rem;
+  }
+  h1 {
+    font-size: 1.5rem;
+    color: var(--primary);
+    margin-bottom: 10px;
+  }
+  .lead {
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    font-size: 1rem;
+  }
+  .user-info {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 24px;
+    text-align: right;
+  }
+  .user-info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 0.95rem;
+  }
+  .user-info-row:not(:last-child) {
+    border-bottom: 1px solid var(--border);
+  }
+  .user-info-row .label {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .user-info-row .value {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .status-pending {
+    background: #fff4e0;
+    color: #92400e;
+  }
+  .status-rejected {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  .explanation {
+    background: #eff6ff;
+    border-right: 4px solid var(--primary);
+    padding: 16px 18px;
+    border-radius: 8px;
+    text-align: right;
+    margin-bottom: 24px;
+    font-size: 0.92rem;
+    line-height: 1.7;
+  }
+  .explanation h3 {
+    font-size: 1rem;
+    color: var(--primary);
+    margin-bottom: 8px;
+  }
+  .explanation ul {
+    padding-right: 18px;
+    color: var(--text-muted);
+  }
+  .explanation li {
+    margin-bottom: 4px;
+  }
+  .rejected-box {
+    background: #fef2f2;
+    border-right: 4px solid var(--danger);
+    padding: 16px 18px;
+    border-radius: 8px;
+    text-align: right;
+    margin-bottom: 24px;
+    font-size: 0.92rem;
+  }
+  .rejected-box h3 {
+    font-size: 1rem;
+    color: #991b1b;
+    margin-bottom: 8px;
+  }
+  .contact-info {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    padding: 14px;
+    background: #f9fafb;
+    border-radius: 8px;
+    margin-bottom: 20px;
+  }
+  .contact-info strong { color: var(--primary); }
+  button, .btn {
+    display: inline-block;
+    padding: 12px 22px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.98rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-family: inherit;
+    text-decoration: none;
+  }
+  button:hover, .btn:hover { background: var(--primary-light); }
+  .btn-secondary {
+    background: #e5e7eb;
+    color: var(--text);
+    margin-left: 8px;
+  }
+  .btn-secondary:hover { background: #d1d5db; }
+  .refresh-note {
+    margin-top: 18px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .loading {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e5e7eb;
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="pending-card" id="pending-card">
+  <div class="loading" id="loading-state">
+    <div class="spinner"></div>
+    <div style="margin-top: 12px;">טוען...</div>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase, getCurrentUser, logout } from './supabase-config.js';
+
+  const card = document.getElementById('pending-card');
+
+  // טעינת משתמש נוכחי
+  const user = await getCurrentUser();
+
+  if (!user) {
+    window.location.href = 'login.html';
+  } else if (!user.profile) {
+    card.innerHTML = `
+      <div class="icon-circle">⚠️</div>
+      <h1>שגיאה בפרופיל</h1>
+      <p class="lead">לא נמצא פרופיל משתמש. אנא התנתק והירשם מחדש.</p>
+      <button id="logout-btn">התנתק</button>
+    `;
+    document.getElementById('logout-btn').addEventListener('click', logout);
+  } else if (user.profile.approval_status === 'approved') {
+    // כבר אושר — הפניה
+    if (user.profile.role === 'admin') {
+      window.location.href = 'admin.html';
+    } else {
+      window.location.href = 'index.html';
+    }
+  } else {
+    renderPending(user.profile);
+  }
+
+  function renderPending(profile) {
+    const isRejected = profile.approval_status === 'rejected';
+
+    const createdDate = profile.created_at
+      ? new Date(profile.created_at).toLocaleDateString('he-IL', {
+          day: '2-digit', month: '2-digit', year: 'numeric'
+        })
+      : '-';
+
+    card.innerHTML = `
+      <div class="icon-circle">${isRejected ? '❌' : '⏳'}</div>
+      <h1>${isRejected ? 'בקשת הרישום נדחתה' : 'הבקשה שלך ממתינה לאישור'}</h1>
+      <p class="lead">
+        ${isRejected
+          ? 'מנהל המערכת דחה את בקשת הרישום שלך. אנא עיין בפרטים ויצור קשר אם יש לך שאלות.'
+          : 'שלום ' + profile.full_name + ', הרישום שלך התקבל במערכת וממתין כעת לאישור מנהל מטעם קבוצת חנן מור.'}
+      </p>
+
+      <div class="user-info">
+        <div class="user-info-row">
+          <span class="label">שם מלא:</span>
+          <span class="value">${profile.full_name}</span>
+        </div>
+        <div class="user-info-row">
+          <span class="label">אימייל:</span>
+          <span class="value">${profile.email || '-'}</span>
+        </div>
+        ${profile.phone ? `
+        <div class="user-info-row">
+          <span class="label">טלפון:</span>
+          <span class="value">${profile.phone}</span>
+        </div>` : ''}
+        ${profile.id_number ? `
+        <div class="user-info-row">
+          <span class="label">ת.ז.:</span>
+          <span class="value">${profile.id_number}</span>
+        </div>` : ''}
+        <div class="user-info-row">
+          <span class="label">תאריך הרשמה:</span>
+          <span class="value">${createdDate}</span>
+        </div>
+        <div class="user-info-row">
+          <span class="label">סטטוס:</span>
+          <span class="value">
+            <span class="status-badge ${isRejected ? 'status-rejected' : 'status-pending'}">
+              ${isRejected ? 'נדחה' : 'ממתין לאישור'}
+            </span>
+          </span>
+        </div>
+      </div>
+
+      ${isRejected ? `
+        <div class="rejected-box">
+          <h3>💬 הודעה ממנהל המערכת:</h3>
+          <div>${profile.admin_notes || 'לא סופקה סיבה. אנא צור קשר לבירור.'}</div>
+        </div>
+      ` : `
+        <div class="explanation">
+          <h3>📋 מה קורה עכשיו?</h3>
+          <ul>
+            <li>הצוות שלנו יבדוק את פרטיך ואת נסח הטאבו שהעלית</li>
+            <li>נוודא שאתה רשום כבעל זכויות בחלקה שציינת</li>
+            <li>לאחר האישור — תקבל הודעת מייל עם גישה מלאה לסימולטור</li>
+            <li>תהליך האישור בדרך כלל אורך 1-2 ימי עסקים</li>
+          </ul>
+        </div>
+      `}
+
+      <div class="contact-info">
+        לבירורים: <strong>קבוצת חנן מור · מתחם המייסדים נס ציונה</strong><br>
+        טלפון: <strong>03-XXXXXXX</strong> · אימייל: <strong>info@hameyasdim.co.il</strong>
+      </div>
+
+      <button id="refresh-btn">🔄 בדוק שוב</button>
+      <button class="btn-secondary" id="logout-btn">התנתק</button>
+
+      <div class="refresh-note">
+        ברגע שהבקשה תאושר — לחץ על "בדוק שוב" או התחבר מחדש
+      </div>
+    `;
+
+    document.getElementById('logout-btn').addEventListener('click', logout);
+    document.getElementById('refresh-btn').addEventListener('click', () => {
+      location.reload();
+    });
+  }
+</script>
+
+</body>
+</html>

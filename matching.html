@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>כלי חיבור בעלים | דשבורד אדמין</title>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --primary-light: #2c5f94;
+    --accent: #c9a961;
+    --success: #2d7a3e;
+    --success-light: #d1fae5;
+    --danger: #dc2626;
+    --warning: #d97706;
+    --warning-light: #fff4e0;
+    --bg: #f7f5f0;
+    --card: #ffffff;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+  .topbar {
+    background: var(--primary);
+    color: white;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .topbar h1 { font-size: 1.15rem; font-weight: 600; }
+  .topbar h1 .badge-admin {
+    background: var(--accent);
+    color: var(--primary);
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 8px;
+    font-weight: 700;
+  }
+  .topbar-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-size: 0.9rem;
+  }
+  .topbar-actions a, .topbar-actions button {
+    color: white;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 14px;
+    border-radius: 6px;
+    text-decoration: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+  }
+  .topbar-actions a:hover, .topbar-actions button:hover {
+    background: rgba(255,255,255,0.2);
+  }
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  .intro {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    border-right: 4px solid var(--accent);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .intro h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 8px; }
+  .intro p { color: var(--text-muted); font-size: 0.95rem; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 16px 20px;
+    border-top: 4px solid var(--primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .stat-card.full { border-top-color: var(--success); }
+  .stat-card.partial { border-top-color: var(--warning); }
+  .stat-card.missing { border-top-color: var(--danger); }
+  .stat-card .label { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; }
+  .stat-card .value { font-size: 1.7rem; font-weight: 700; color: var(--primary); }
+
+  .parcels-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 16px;
+  }
+  .parcel-card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border-top: 4px solid var(--primary);
+  }
+  .parcel-card.full { border-top-color: var(--success); }
+  .parcel-card.partial { border-top-color: var(--warning); }
+  .parcel-card.missing { border-top-color: #9ca3af; }
+
+  .parcel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .parcel-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+  .parcel-status {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+  .parcel-status.full { background: var(--success-light); color: #065f46; }
+  .parcel-status.partial { background: var(--warning-light); color: #92400e; }
+  .parcel-status.missing { background: #f3f4f6; color: #6b7280; }
+
+  .parcel-progress {
+    background: #f3f4f6;
+    border-radius: 20px;
+    overflow: hidden;
+    height: 10px;
+    margin: 8px 0 12px;
+  }
+  .parcel-progress-bar {
+    height: 100%;
+    background: var(--primary);
+    transition: width 0.3s;
+  }
+  .parcel-card.full .parcel-progress-bar { background: var(--success); }
+  .parcel-card.partial .parcel-progress-bar { background: var(--warning); }
+
+  .parcel-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: 0.88rem;
+    margin-bottom: 12px;
+  }
+  .parcel-stat .label { color: var(--text-muted); font-size: 0.78rem; }
+  .parcel-stat .value { font-weight: 600; color: var(--text); }
+
+  .owners-list {
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 10px;
+  }
+  .owners-title {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .owner-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 8px;
+    background: #f9fafb;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    font-size: 0.85rem;
+  }
+  .owner-row .name { font-weight: 600; }
+  .owner-row .area { color: var(--text-muted); font-size: 0.8rem; }
+  .owner-row.pending { opacity: 0.6; font-style: italic; }
+  .owner-row.pending .name::after {
+    content: ' (ממתין)';
+    color: var(--warning);
+    font-size: 0.75rem;
+  }
+  .no-owners {
+    color: #9ca3af;
+    font-style: italic;
+    font-size: 0.85rem;
+    padding: 5px 0;
+  }
+
+  .gap-note {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: #fff4e0;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: #92400e;
+  }
+  .gap-note strong { color: #78350f; }
+
+  .controls-bar {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 12px 18px;
+    margin-bottom: 16px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .controls-bar select, .controls-bar input {
+    padding: 8px 12px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
+  .controls-bar label { font-size: 0.9rem; color: var(--text-muted); }
+  .controls-bar input[type="text"] { min-width: 200px; }
+
+  .loading {
+    text-align: center;
+    padding: 60px;
+    color: var(--text-muted);
+  }
+  .spinner {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    border: 3px solid #e5e7eb;
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>
+    <span class="badge-admin">ADMIN</span>
+    🔗 כלי חיבור בעלים · השלמת חלקות סחירות
+  </h1>
+  <div class="topbar-actions">
+    <a href="admin.html">← דשבורד משתמשים</a>
+    <button id="logout-btn">התנתק</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="intro">
+    <h2>💡 מטרת הכלי</h2>
+    <p>
+      מיפוי כל 43 החלקות החקלאיות בגוש 3852 (תמ"ל 3010) והצגת סטטוס הבעלים הרשומים במערכת לכל חלקה.
+      <strong>ירוק</strong> = כל החלקה מכוסה · <strong>צהוב</strong> = חסרים בעלים (המשך חיפוש מומלץ) · <strong>אפור</strong> = עדיין אין בעלים רשומים.
+      הכלי מסייע לזהות לאילו חלקות דרושים בעלים נוספים כדי להציג בפני שמאי התוכנית הסכם שלם ולקבל מגרש סחיר מלא.
+    </p>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">סה"כ חלקות במתחם</div>
+      <div class="value" id="stat-total">-</div>
+    </div>
+    <div class="stat-card full">
+      <div class="label">חלקות מכוסות במלואן</div>
+      <div class="value" id="stat-full">-</div>
+    </div>
+    <div class="stat-card partial">
+      <div class="label">חלקות חלקיות</div>
+      <div class="value" id="stat-partial">-</div>
+    </div>
+    <div class="stat-card missing">
+      <div class="label">חלקות ללא בעלים רשומים</div>
+      <div class="value" id="stat-missing">-</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">שטח חסר סה"כ (מ"ר)</div>
+      <div class="value" id="stat-gap" style="font-size:1.3rem;">-</div>
+    </div>
+  </div>
+
+  <div class="controls-bar">
+    <input type="text" id="search-input" placeholder="🔍 חיפוש מספר חלקה או שם בעל...">
+    <select id="status-filter">
+      <option value="">כל הסטטוסים</option>
+      <option value="full">מכוסה במלואה</option>
+      <option value="partial">חלקית</option>
+      <option value="missing">ללא בעלים</option>
+    </select>
+    <label>
+      <input type="checkbox" id="include-pending-cb" checked>
+      כלול משתמשים ממתינים לאישור
+    </label>
+    <select id="sort-select">
+      <option value="parcel">מיון לפי מס' חלקה</option>
+      <option value="gap-desc">חלקות עם פער גדול תחילה</option>
+      <option value="area-desc">חלקות גדולות תחילה</option>
+    </select>
+  </div>
+
+  <div id="content">
+    <div class="loading"><div class="spinner"></div><div style="margin-top:10px;">טוען נתונים...</div></div>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, logout } from './supabase-config.js';
+
+  const currentAdmin = await requireAuth({ requireAdmin: true });
+  if (!currentAdmin) throw new Error('Not admin');
+  document.getElementById('logout-btn').addEventListener('click', logout);
+
+  // מאגר 43 החלקות הנכללות באיחוד והחלוקה — גוש 3852 (מתוך דו"ח השמאי של תמ"ל 3010)
+  // includedArea הוא השטח שמשתתף בעסקה (יכול להיות נמוך מ-totalArea במקרה של חלקה חלקית)
+  const PARCELS = [
+    { parcel: 3,  totalArea: 2266,  includedArea: 2266 },
+    { parcel: 5,  totalArea: 13794, includedArea: 13794 },
+    { parcel: 6,  totalArea: 7764,  includedArea: 7764 },
+    { parcel: 7,  totalArea: 5096,  includedArea: 5096 },
+    { parcel: 8,  totalArea: 11969, includedArea: 11969 },
+    { parcel: 9,  totalArea: 9126,  includedArea: 9126 },
+    { parcel: 11, totalArea: 5357,  includedArea: 5357 },
+    { parcel: 12, totalArea: 12232, includedArea: 12232 },
+    { parcel: 13, totalArea: 302,   includedArea: 302 },
+    { parcel: 14, totalArea: 14152, includedArea: 14152 },
+    { parcel: 15, totalArea: 17264, includedArea: 17264 },
+    { parcel: 16, totalArea: 9022,  includedArea: 9022 },
+    { parcel: 17, totalArea: 16987, includedArea: 16987 },
+    { parcel: 18, totalArea: 16830, includedArea: 16830 },
+    { parcel: 19, totalArea: 26980, includedArea: 26980 },
+    { parcel: 20, totalArea: 12468, includedArea: 10904 },
+    { parcel: 21, totalArea: 13926, includedArea: 4573 },
+    { parcel: 22, totalArea: 10000, includedArea: 155 },
+    { parcel: 26, totalArea: 6706,  includedArea: 183 },
+    { parcel: 28, totalArea: 27335, includedArea: 27335 },
+    { parcel: 31, totalArea: 22270, includedArea: 22270 },
+    { parcel: 32, totalArea: 22393, includedArea: 22393 },
+    { parcel: 34, totalArea: 7400,  includedArea: 7400 },
+    { parcel: 36, totalArea: 70,    includedArea: 70 },
+    { parcel: 39, totalArea: 15000, includedArea: 15000 },
+    { parcel: 40, totalArea: 7371,  includedArea: 7371 },
+    { parcel: 41, totalArea: 10667, includedArea: 351 },
+    { parcel: 42, totalArea: 9500,  includedArea: 1807 },
+    { parcel: 44, totalArea: 13169, includedArea: 13169 },
+    { parcel: 45, totalArea: 18236, includedArea: 10104 },
+    { parcel: 46, totalArea: 5922,  includedArea: 5628 },
+    { parcel: 49, totalArea: 1105,  includedArea: 1105 },
+    { parcel: 51, totalArea: 24918, includedArea: 24918 },
+    { parcel: 53, totalArea: 12926, includedArea: 12926 },
+    { parcel: 55, totalArea: 14600, includedArea: 14600 },
+    { parcel: 57, totalArea: 6138,  includedArea: 5327 },
+    { parcel: 59, totalArea: 12461, includedArea: 12461 },
+    { parcel: 61, totalArea: 9451,  includedArea: 9451 },
+    { parcel: 66, totalArea: 824,   includedArea: 824 },
+    { parcel: 67, totalArea: 10036, includedArea: 10036 },
+    { parcel: 68, totalArea: 10032, includedArea: 10032 },
+    { parcel: 69, totalArea: 10035, includedArea: 10035 },
+    { parcel: 70, totalArea: 10039, includedArea: 10039 },
+  ];
+
+  let allParcels = [];
+  let allProfiles = {};
+
+  async function loadData() {
+    const [parcelsRes, profilesRes] = await Promise.all([
+      supabase.from('user_parcels').select('*'),
+      supabase.from('profiles').select('id, full_name, email, phone, approval_status'),
+    ]);
+
+    if (parcelsRes.error || profilesRes.error) {
+      document.getElementById('content').innerHTML =
+        `<div style="text-align:center;padding:40px;color:#dc2626;">שגיאה בטעינה</div>`;
+      return;
+    }
+
+    allParcels = parcelsRes.data || [];
+    allProfiles = {};
+    (profilesRes.data || []).forEach(p => { allProfiles[p.id] = p; });
+
+    render();
+  }
+
+  function render() {
+    const search = document.getElementById('search-input').value.trim().toLowerCase();
+    const status = document.getElementById('status-filter').value;
+    const includePending = document.getElementById('include-pending-cb').checked;
+    const sort = document.getElementById('sort-select').value;
+
+    // חישוב סטטוס לכל חלקה
+    const parcelStatus = PARCELS.map(p => {
+      // בעלים רלוונטיים לחלקה הזו (block=3852)
+      let owners = allParcels.filter(up => up.block === 3852 && up.parcel === p.parcel);
+      if (!includePending) {
+        owners = owners.filter(up => {
+          const prof = allProfiles[up.user_id];
+          return prof && prof.approval_status === 'approved';
+        });
+      }
+      const coveredArea = owners.reduce((s, up) => s + Number(up.area_owned || 0), 0);
+      // ההשלמה נמדדת מול השטח הנכלל בעסקה (includedArea) — זה מה שמשתתף באיחוד והחלוקה
+      const targetArea = p.includedArea;
+      const gap = Math.max(0, targetArea - coveredArea);
+      const coverage = targetArea > 0 ? coveredArea / targetArea : 0;
+
+      let statusClass, statusLabel;
+      if (owners.length === 0) {
+        statusClass = 'missing';
+        statusLabel = 'ללא בעלים';
+      } else if (coverage >= 0.995) {
+        statusClass = 'full';
+        statusLabel = 'מכוסה במלואה';
+      } else {
+        statusClass = 'partial';
+        statusLabel = 'חלקית';
+      }
+
+      return { parcel: p, owners, coveredArea, gap, coverage, statusClass, statusLabel };
+    });
+
+    // סטטיסטיקות
+    document.getElementById('stat-total').textContent = PARCELS.length;
+    document.getElementById('stat-full').textContent = parcelStatus.filter(p => p.statusClass === 'full').length;
+    document.getElementById('stat-partial').textContent = parcelStatus.filter(p => p.statusClass === 'partial').length;
+    document.getElementById('stat-missing').textContent = parcelStatus.filter(p => p.statusClass === 'missing').length;
+    const totalGap = parcelStatus.reduce((s, p) => s + p.gap, 0);
+    document.getElementById('stat-gap').textContent = totalGap.toLocaleString('he-IL');
+
+    // סינון
+    let filtered = parcelStatus;
+    if (search) {
+      filtered = filtered.filter(ps => {
+        if (String(ps.parcel.parcel).includes(search)) return true;
+        return ps.owners.some(up => {
+          const prof = allProfiles[up.user_id];
+          return prof && (prof.full_name || '').toLowerCase().includes(search);
+        });
+      });
+    }
+    if (status) filtered = filtered.filter(ps => ps.statusClass === status);
+
+    // מיון
+    if (sort === 'gap-desc') filtered.sort((a, b) => b.gap - a.gap);
+    else if (sort === 'area-desc') filtered.sort((a, b) => b.parcel.includedArea - a.parcel.includedArea);
+    else filtered.sort((a, b) => a.parcel.parcel - b.parcel.parcel);
+
+    // רינדור
+    const content = document.getElementById('content');
+    if (filtered.length === 0) {
+      content.innerHTML = `<div style="text-align:center;padding:60px;color:#6b7280;">אין חלקות להצגה</div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="parcels-grid">
+        ${filtered.map(ps => {
+          const coveragePct = Math.round(ps.coverage * 100);
+          const ownersHtml = ps.owners.length
+            ? ps.owners.map(up => {
+                const prof = allProfiles[up.user_id] || { full_name: 'משתמש לא ידוע', approval_status: 'pending' };
+                const pendingClass = prof.approval_status !== 'approved' ? ' pending' : '';
+                return `
+                  <div class="owner-row${pendingClass}">
+                    <span class="name">${prof.full_name}</span>
+                    <span class="area">${Number(up.area_owned).toLocaleString('he-IL')} מ"ר</span>
+                  </div>`;
+              }).join('')
+            : '<div class="no-owners">אין בעלים רשומים במערכת</div>';
+
+          return `
+            <div class="parcel-card ${ps.statusClass}">
+              <div class="parcel-header">
+                <div class="parcel-title">חלקה ${ps.parcel.parcel}</div>
+                <span class="parcel-status ${ps.statusClass}">${ps.statusLabel}</span>
+              </div>
+              <div class="parcel-progress">
+                <div class="parcel-progress-bar" style="width:${Math.min(100, coveragePct)}%;"></div>
+              </div>
+              <div class="parcel-stats">
+                <div class="parcel-stat">
+                  <div class="label">שטח רשום / נכלל בעסקה</div>
+                  <div class="value">${ps.parcel.totalArea.toLocaleString('he-IL')}${ps.parcel.totalArea !== ps.parcel.includedArea ? ` / <span style="color:#d97706;">${ps.parcel.includedArea.toLocaleString('he-IL')}</span>` : ''} מ"ר</div>
+                </div>
+                <div class="parcel-stat">
+                  <div class="label">מכוסה ע"י בעלים</div>
+                  <div class="value">${ps.coveredArea.toLocaleString('he-IL')} מ"ר (${coveragePct}%)</div>
+                </div>
+              </div>
+              <div class="owners-list">
+                <div class="owners-title">בעלים רשומים (${ps.owners.length})</div>
+                ${ownersHtml}
+              </div>
+              ${ps.gap > 0 ? `
+                <div class="gap-note">
+                  <strong>🎯 פער להשלמה:</strong> ${ps.gap.toLocaleString('he-IL')} מ"ר נוספים דרושים להסכם שיתוף מלא
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  document.getElementById('search-input').addEventListener('input', render);
+  document.getElementById('status-filter').addEventListener('change', render);
+  document.getElementById('include-pending-cb').addEventListener('change', render);
+  document.getElementById('sort-select').addEventListener('change', render);
+
+  await loadData();
+</script>
+
+</body>
+</html>

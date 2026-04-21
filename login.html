@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>כניסה | סימולטור עסקת קומבינציה ושיתוף</title>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --primary-light: #2c5f94;
+    --accent: #c9a961;
+    --success: #2d7a3e;
+    --danger: #dc2626;
+    --bg: #f7f5f0;
+    --card: #ffffff;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+    background: linear-gradient(135deg, #f7f5f0 0%, #e6f0ff 100%);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    line-height: 1.6;
+  }
+  .auth-card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 440px;
+    border-top: 5px solid var(--accent);
+  }
+  .brand {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .brand h1 {
+    font-size: 1.4rem;
+    color: var(--primary);
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .brand .subtitle {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  h2 {
+    font-size: 1.2rem;
+    color: var(--primary);
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .field {
+    margin-bottom: 16px;
+  }
+  .field label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .field input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    transition: border-color 0.2s;
+  }
+  .field input:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+  button.primary {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-family: inherit;
+    margin-top: 8px;
+  }
+  button.primary:hover:not(:disabled) { background: var(--primary-light); }
+  button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .error-msg {
+    background: #fee2e2;
+    color: #7f1d1d;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border-right: 4px solid var(--danger);
+    font-size: 0.88rem;
+    margin-top: 12px;
+    display: none;
+  }
+  .error-msg.visible { display: block; }
+  .bottom-link {
+    text-align: center;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .bottom-link a {
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .bottom-link a:hover { text-decoration: underline; }
+  .forgot-link {
+    text-align: center;
+    margin-top: 12px;
+    font-size: 0.85rem;
+  }
+  .forgot-link a {
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+  .forgot-link a:hover { color: var(--primary); text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="auth-card">
+  <div class="brand">
+    <h1>סימולטור עסקת קומבינציה ושיתוף</h1>
+    <div class="subtitle">מתחם המייסדים · נס ציונה · תמ"ל 3010</div>
+  </div>
+
+  <h2>🔐 כניסה לחשבון</h2>
+
+  <form id="login-form">
+    <div class="field">
+      <label for="email">אימייל</label>
+      <input type="email" id="email" required autocomplete="email" placeholder="your@email.com" />
+    </div>
+    <div class="field">
+      <label for="password">סיסמה</label>
+      <input type="password" id="password" required autocomplete="current-password" minlength="6" />
+    </div>
+
+    <button type="submit" class="primary" id="submit-btn">כניסה</button>
+
+    <div class="error-msg" id="error-msg"></div>
+  </form>
+
+  <div class="forgot-link">
+    <a href="#" id="forgot-link">שכחת סיסמה?</a>
+  </div>
+
+  <div class="bottom-link">
+    אין לך חשבון? <a href="register.html">הירשם כאן</a>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase, getCurrentUser } from './supabase-config.js';
+
+  // בדיקה אם כבר מחובר — הפניה לדף המתאים
+  const currentUser = await getCurrentUser();
+  if (currentUser && currentUser.profile) {
+    if (currentUser.profile.approval_status !== 'approved') {
+      window.location.href = 'pending.html';
+    } else if (currentUser.profile.role === 'admin') {
+      window.location.href = 'admin.html';
+    } else {
+      window.location.href = 'index.html';
+    }
+  }
+
+  const form = document.getElementById('login-form');
+  const errorMsg = document.getElementById('error-msg');
+  const submitBtn = document.getElementById('submit-btn');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorMsg.classList.remove('visible');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'מתחבר...';
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      let msg = 'שגיאה בהתחברות';
+      if (error.message.includes('Invalid login')) msg = 'אימייל או סיסמה שגויים';
+      else if (error.message.includes('Email not confirmed')) msg = 'האימייל טרם אושר — בדוק בתיבת המייל שלך';
+      else msg = 'שגיאה: ' + error.message;
+      errorMsg.textContent = '❌ ' + msg;
+      errorMsg.classList.add('visible');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'כניסה';
+      return;
+    }
+
+    // טעינת פרופיל לבחירת יעד הפניה
+    const { data: profile } = await supabase
+      .from('profiles').select('role, approval_status').eq('id', data.user.id).single();
+
+    if (!profile || profile.approval_status !== 'approved') {
+      window.location.href = 'pending.html';
+    } else if (profile.role === 'admin') {
+      window.location.href = 'admin.html';
+    } else {
+      window.location.href = 'index.html';
+    }
+  });
+
+  document.getElementById('forgot-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    if (!email) {
+      alert('הזן תחילה את האימייל שלך ואז לחץ שוב על "שכחת סיסמה?"');
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) alert('שגיאה: ' + error.message);
+    else alert('✅ קישור לאיפוס סיסמה נשלח ל-' + email);
+  });
+</script>
+
+</body>
+</html>
