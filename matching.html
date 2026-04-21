@@ -245,6 +245,149 @@
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* טאבים - בחירת מצב תצוגה */
+  .tabs-bar {
+    display: flex;
+    gap: 4px;
+    background: var(--card);
+    border-radius: 10px 10px 0 0;
+    padding: 6px 6px 0 6px;
+    margin-bottom: -1px;
+    border-bottom: 2px solid var(--primary);
+  }
+  .tab-btn {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-radius: 8px 8px 0 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    border-bottom: 3px solid transparent;
+  }
+  .tab-btn:hover { background: #f9fafb; color: var(--primary); }
+  .tab-btn.active {
+    background: var(--primary);
+    color: white;
+    border-bottom-color: var(--primary);
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* כרטיסי מגרשים סחירים - שונים קצת מחלקות המקור */
+  .lot-card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border-top: 4px solid var(--primary);
+  }
+  .lot-card.full { border-top-color: var(--success); }
+  .lot-card.partial { border-top-color: var(--warning); }
+  .lot-card.empty { border-top-color: #94a3b8; }
+  .lot-card.rental { border-top-color: #0891b2; }
+
+  .lot-card .lot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .lot-card .lot-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+  .lot-card .lot-use-tag {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #e5e7eb;
+    color: var(--text-muted);
+  }
+  .lot-card .lot-use-tag.rental {
+    background: #cffafe;
+    color: #0891b2;
+  }
+
+  .lot-card .lot-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .lot-card .lot-meta strong { color: var(--text); }
+
+  .lot-progress {
+    height: 10px;
+    background: #e5e7eb;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .lot-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);
+    transition: width 0.3s;
+  }
+  .lot-card.full .lot-progress-bar { background: linear-gradient(90deg, var(--success) 0%, #4ca860 100%); }
+  .lot-card.partial .lot-progress-bar { background: linear-gradient(90deg, var(--warning) 0%, #f59e0b 100%); }
+
+  .contributors-list {
+    margin-top: 10px;
+  }
+  .contributors-list .contributors-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .contributor-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px dashed var(--border);
+    font-size: 0.9rem;
+  }
+  .contributor-row:last-child { border-bottom: none; }
+  .contributor-row .name { font-weight: 600; }
+  .contributor-row .area {
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .contributor-row .percent {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-right: 6px;
+  }
+
+  .lot-gap-note {
+    background: var(--warning-light);
+    color: #92400e;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-top: 10px;
+  }
+  .lot-complete-note {
+    background: var(--success-light);
+    color: #065f46;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    text-align: center;
+    font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -294,27 +437,62 @@
     </div>
   </div>
 
-  <div class="controls-bar">
-    <input type="text" id="search-input" placeholder="🔍 חיפוש מספר חלקה או שם בעל...">
-    <select id="status-filter">
-      <option value="">כל הסטטוסים</option>
-      <option value="full">מכוסה במלואה</option>
-      <option value="partial">חלקית</option>
-      <option value="missing">ללא בעלים</option>
-    </select>
-    <label>
-      <input type="checkbox" id="include-pending-cb" checked>
-      כלול משתמשים ממתינים לאישור
-    </label>
-    <select id="sort-select">
-      <option value="parcel">מיון לפי מס' חלקה</option>
-      <option value="gap-desc">חלקות עם פער גדול תחילה</option>
-      <option value="area-desc">חלקות גדולות תחילה</option>
-    </select>
+  <div class="tabs-bar">
+    <button class="tab-btn active" data-tab="parcels">🌾 חלקות מקור (חקלאי)</button>
+    <button class="tab-btn" data-tab="lots">🏗️ מגרשים סחירים (מצב יוצא)</button>
   </div>
 
-  <div id="content">
-    <div class="loading"><div class="spinner"></div><div style="margin-top:10px;">טוען נתונים...</div></div>
+  <!-- טאב 1: חלקות מקור -->
+  <div class="tab-content active" id="tab-parcels">
+    <div class="controls-bar">
+      <input type="text" id="search-input" placeholder="🔍 חיפוש מספר חלקה או שם בעל...">
+      <select id="status-filter">
+        <option value="">כל הסטטוסים</option>
+        <option value="full">מכוסה במלואה</option>
+        <option value="partial">חלקית</option>
+        <option value="missing">ללא בעלים</option>
+      </select>
+      <label>
+        <input type="checkbox" id="include-pending-cb" checked>
+        כלול משתמשים ממתינים לאישור
+      </label>
+      <select id="sort-select">
+        <option value="parcel">מיון לפי מס' חלקה</option>
+        <option value="gap-desc">חלקות עם פער גדול תחילה</option>
+        <option value="area-desc">חלקות גדולות תחילה</option>
+      </select>
+    </div>
+
+    <div id="content">
+      <div class="loading"><div class="spinner"></div><div style="margin-top:10px;">טוען נתונים...</div></div>
+    </div>
+  </div>
+
+  <!-- טאב 2: מגרשים סחירים -->
+  <div class="tab-content" id="tab-lots">
+    <div class="controls-bar">
+      <input type="text" id="lot-search" placeholder="🔍 חיפוש מספר מגרש או שם תורם...">
+      <select id="lot-status-filter">
+        <option value="">כל המגרשים</option>
+        <option value="full">מכוסה במלואו</option>
+        <option value="partial">חלקי</option>
+        <option value="empty">ללא תורמים</option>
+      </select>
+      <select id="lot-type-filter">
+        <option value="">כל הסוגים</option>
+        <option value="ownership">דיור בעלות</option>
+        <option value="rental">דיור להשכרה</option>
+      </select>
+      <select id="lot-sort">
+        <option value="id">מיון לפי מס' מגרש</option>
+        <option value="gap-desc">מגרשים עם פער גדול תחילה</option>
+        <option value="coverage-desc">הכי מכוסים תחילה</option>
+      </select>
+    </div>
+
+    <div id="lots-content">
+      <div class="loading"><div class="spinner"></div><div style="margin-top:10px;">טוען נתונים...</div></div>
+    </div>
   </div>
 </div>
 
@@ -373,13 +551,60 @@
     { parcel: 70, totalArea: 10039, includedArea: 10039 },
   ];
 
+  // ============================================================
+  // מאגר 38 המגרשים הסחירים במצב היוצא (מתוך טבלת ההקצאה של תמ"ל 3010)
+  // נתונים מותאמים ל-index.html — שטח נדרש, יח"ד, ייעוד
+  // ============================================================
+  const LOTS = [
+    { id: 1,  use: 'מגורים ותעסוקה', units: 102, rentalUnits: 0,   requiredIncomingArea: 8536 },
+    { id: 2,  use: 'מגורים ותעסוקה', units: 324, rentalUnits: 0,   requiredIncomingArea: 22309 },
+    { id: 3,  use: 'השכרה + מסחר',   units: 0,   rentalUnits: 264, requiredIncomingArea: 8195 },
+    { id: 4,  use: 'מגורים ותעסוקה', units: 96,  rentalUnits: 0,   requiredIncomingArea: 3962 },
+    { id: 5,  use: 'מגורים ותעסוקה', units: 168, rentalUnits: 0,   requiredIncomingArea: 5856 },
+    { id: 6,  use: 'מגורים ד׳ השכרה', units: 0,  rentalUnits: 213, requiredIncomingArea: 1891 },
+    { id: 7,  use: 'מגורים ד׳ השכרה', units: 0,  rentalUnits: 234, requiredIncomingArea: 4591 },
+    { id: 8,  use: 'מגורים ד׳',       units: 180, rentalUnits: 0,   requiredIncomingArea: 10722 },
+    { id: 9,  use: 'מגורים ד׳',       units: 330, rentalUnits: 0,   requiredIncomingArea: 20518 },
+    { id: 10, use: 'מגורים ד׳',       units: 222, rentalUnits: 0,   requiredIncomingArea: 14239 },
+    { id: 11, use: 'מגורים ד׳',       units: 230, rentalUnits: 0,   requiredIncomingArea: 14300 },
+    { id: 12, use: 'מגורים ד׳',       units: 211, rentalUnits: 0,   requiredIncomingArea: 12463 },
+    { id: 13, use: 'מגורים ד׳',       units: 163, rentalUnits: 0,   requiredIncomingArea: 10668 },
+    { id: 14, use: 'מגורים ד׳',       units: 81,  rentalUnits: 0,   requiredIncomingArea: 4935 },
+    { id: 15, use: 'מגורים ד׳',       units: 143, rentalUnits: 0,   requiredIncomingArea: 8438 },
+    { id: 16, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 12143 },
+    { id: 17, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 12782 },
+    { id: 18, use: 'מגורים ד׳',       units: 192, rentalUnits: 0,   requiredIncomingArea: 12931 },
+    { id: 19, use: 'מגורים ד׳',       units: 288, rentalUnits: 0,   requiredIncomingArea: 18729 },
+    { id: 20, use: 'מגורים ד׳',       units: 201, rentalUnits: 0,   requiredIncomingArea: 13838 },
+    { id: 21, use: 'מגורים ה׳',       units: 192, rentalUnits: 0,   requiredIncomingArea: 13232 },
+    { id: 22, use: 'מגורים ד׳',       units: 178, rentalUnits: 0,   requiredIncomingArea: 11690 },
+    { id: 23, use: 'מגורים ד׳ השכרה', units: 0,  rentalUnits: 188, requiredIncomingArea: 3990 },
+    { id: 24, use: 'מגורים ד׳',       units: 176, rentalUnits: 0,   requiredIncomingArea: 12154 },
+    { id: 25, use: 'מגורים ד׳ השכרה', units: 0,  rentalUnits: 267, requiredIncomingArea: 5996 },
+    { id: 26, use: 'מגורים ד׳',       units: 175, rentalUnits: 0,   requiredIncomingArea: 10843 },
+    { id: 27, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 11760 },
+    { id: 28, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 11334 },
+    { id: 29, use: 'מגורים ד׳',       units: 207, rentalUnits: 0,   requiredIncomingArea: 12915 },
+    { id: 30, use: 'מגורים ד׳',       units: 195, rentalUnits: 0,   requiredIncomingArea: 13155 },
+    { id: 31, use: 'מגורים ד׳',       units: 201, rentalUnits: 0,   requiredIncomingArea: 14070 },
+    { id: 32, use: 'מגורים ד׳',       units: 192, rentalUnits: 0,   requiredIncomingArea: 13232 },
+    { id: 33, use: 'מגורים ד׳',       units: 178, rentalUnits: 0,   requiredIncomingArea: 11690 },
+    { id: 34, use: 'מגורים ד׳',       units: 176, rentalUnits: 0,   requiredIncomingArea: 12154 },
+    { id: 35, use: 'מגורים ד׳',       units: 175, rentalUnits: 0,   requiredIncomingArea: 10843 },
+    { id: 36, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 11760 },
+    { id: 37, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 11334 },
+    { id: 38, use: 'מגורים ד׳',       units: 207, rentalUnits: 0,   requiredIncomingArea: 12915 },
+  ];
+
   let allParcels = [];
   let allProfiles = {};
+  let allSelections = [];  // כל הבחירות שהמשתמשים שמרו
 
   async function loadData() {
-    const [parcelsRes, profilesRes] = await Promise.all([
+    const [parcelsRes, profilesRes, selectionsRes] = await Promise.all([
       supabase.from('user_parcels').select('*'),
       supabase.from('profiles').select('id, full_name, email, phone, approval_status'),
+      supabase.from('selections').select('*').eq('is_current', true),
     ]);
 
     if (parcelsRes.error || profilesRes.error) {
@@ -391,8 +616,10 @@
     allParcels = parcelsRes.data || [];
     allProfiles = {};
     (profilesRes.data || []).forEach(p => { allProfiles[p.id] = p; });
+    allSelections = selectionsRes.data || [];
 
     render();
+    renderLots();
   }
 
   function render() {
@@ -516,10 +743,153 @@
     `;
   }
 
+  // ============================================================
+  // תצוגת מגרשים סחירים — מי תרם לאיזה מגרש, כמה חסר עד השלמה
+  // ============================================================
+  function renderLots() {
+    const search = document.getElementById('lot-search').value.trim().toLowerCase();
+    const statusFilter = document.getElementById('lot-status-filter').value;
+    const typeFilter = document.getElementById('lot-type-filter').value;
+    const sort = document.getElementById('lot-sort').value;
+
+    // בניית מפה: lot_id → מערך של תורמים {userId, name, area, sharePercent, approval_status}
+    const contributorsByLot = {};
+    allSelections.forEach(sel => {
+      const profile = allProfiles[sel.user_id];
+      if (!profile) return;
+      const lots = Array.isArray(sel.selected_lots) ? sel.selected_lots : [];
+      lots.forEach(l => {
+        if (!contributorsByLot[l.lot_id]) contributorsByLot[l.lot_id] = [];
+        contributorsByLot[l.lot_id].push({
+          userId: sel.user_id,
+          name: profile.full_name || 'משתמש לא ידוע',
+          approval_status: profile.approval_status,
+          area: +l.allocated_area || 0,
+          sharePercent: +l.share_percent || 0,
+        });
+      });
+    });
+
+    // חישוב סטטוס לכל מגרש
+    let lotStatus = LOTS.map(lot => {
+      const contributors = contributorsByLot[lot.id] || [];
+      const coveredArea = contributors.reduce((s, c) => s + c.area, 0);
+      const gap = Math.max(0, lot.requiredIncomingArea - coveredArea);
+      const coverage = lot.requiredIncomingArea > 0 ? coveredArea / lot.requiredIncomingArea : 0;
+
+      let statusClass;
+      if (contributors.length === 0) statusClass = 'empty';
+      else if (coverage >= 0.995) statusClass = 'full';
+      else statusClass = 'partial';
+
+      return { lot, contributors, coveredArea, gap, coverage, statusClass };
+    });
+
+    // סינונים
+    if (search) {
+      lotStatus = lotStatus.filter(ls => {
+        if (String(ls.lot.id).includes(search)) return true;
+        return ls.contributors.some(c => (c.name || '').toLowerCase().includes(search));
+      });
+    }
+    if (statusFilter) lotStatus = lotStatus.filter(ls => ls.statusClass === statusFilter);
+    if (typeFilter === 'ownership') lotStatus = lotStatus.filter(ls => ls.lot.units > 0);
+    else if (typeFilter === 'rental') lotStatus = lotStatus.filter(ls => ls.lot.rentalUnits > 0 && ls.lot.units === 0);
+
+    // מיון
+    if (sort === 'gap-desc') lotStatus.sort((a, b) => b.gap - a.gap);
+    else if (sort === 'coverage-desc') lotStatus.sort((a, b) => b.coverage - a.coverage);
+    else lotStatus.sort((a, b) => a.lot.id - b.lot.id);
+
+    // רינדור
+    const container = document.getElementById('lots-content');
+    if (lotStatus.length === 0) {
+      container.innerHTML = `<div style="text-align:center;padding:60px;color:#6b7280;">אין מגרשים להצגה</div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="parcels-grid">
+        ${lotStatus.map(ls => {
+          const isRental = ls.lot.rentalUnits > 0 && ls.lot.units === 0;
+          const coveragePct = Math.round(ls.coverage * 100);
+          const cardClass = isRental ? `${ls.statusClass} rental` : ls.statusClass;
+
+          const contributorsHtml = ls.contributors.length
+            ? ls.contributors
+                .sort((a, b) => b.area - a.area)
+                .map(c => {
+                  const pendingNote = c.approval_status !== 'approved' ? ' ⏳' : '';
+                  return `
+                    <div class="contributor-row">
+                      <span class="name">${c.name}${pendingNote}</span>
+                      <span>
+                        <span class="percent">(${(c.sharePercent * 100).toFixed(1)}% מהמגרש)</span>
+                        <span class="area">${Math.round(c.area).toLocaleString('he-IL')} מ"ר</span>
+                      </span>
+                    </div>`;
+                }).join('')
+            : '<div style="color:#9ca3af;padding:10px 0;text-align:center;">עדיין אין תורמים רשומים למגרש זה</div>';
+
+          const unitsLabel = ls.lot.units > 0
+            ? `${ls.lot.units} יח"ד בעלות`
+            : `${ls.lot.rentalUnits} יח"ד השכרה`;
+
+          const gapOrComplete = ls.gap > 0
+            ? `<div class="lot-gap-note">
+                 <strong>🎯 פער להשלמה:</strong> ${ls.gap.toLocaleString('he-IL')} מ"ר חקלאיים נוספים דרושים להשלמת המגרש.
+                 ${ls.contributors.length === 0 ? '' : `(מכוסה עד כה: ${coveragePct}%)`}
+               </div>`
+            : ls.contributors.length > 0
+              ? `<div class="lot-complete-note">✓ המגרש מכוסה במלואו — אפשר להתקדם להסכם קומבינציה</div>`
+              : '';
+
+          return `
+            <div class="lot-card ${cardClass}">
+              <div class="lot-header">
+                <div class="lot-title">🗺️ מגרש ${ls.lot.id}</div>
+                <span class="lot-use-tag ${isRental ? 'rental' : ''}">${ls.lot.use}</span>
+              </div>
+              <div class="lot-meta">
+                <span><strong>${unitsLabel}</strong></span>
+                <span>שטח נדרש: <strong>${ls.lot.requiredIncomingArea.toLocaleString('he-IL')} מ"ר</strong></span>
+                <span>כוסה: <strong style="color:${coveragePct >= 99 ? 'var(--success)' : coveragePct > 0 ? 'var(--warning)' : 'var(--text-muted)'};">${Math.round(ls.coveredArea).toLocaleString('he-IL')} מ"ר (${coveragePct}%)</strong></span>
+              </div>
+              <div class="lot-progress">
+                <div class="lot-progress-bar" style="width:${Math.min(100, coveragePct)}%;"></div>
+              </div>
+              <div class="contributors-list">
+                <div class="contributors-title">תורמים רשומים (${ls.contributors.length})</div>
+                ${contributorsHtml}
+              </div>
+              ${gapOrComplete}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  // החלפה בין טאבים
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.dataset.tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${targetTab}`));
+    });
+  });
+
+  // מאזינים - טאב חלקות מקור
   document.getElementById('search-input').addEventListener('input', render);
   document.getElementById('status-filter').addEventListener('change', render);
   document.getElementById('include-pending-cb').addEventListener('change', render);
   document.getElementById('sort-select').addEventListener('change', render);
+
+  // מאזינים - טאב מגרשים סחירים
+  document.getElementById('lot-search').addEventListener('input', renderLots);
+  document.getElementById('lot-status-filter').addEventListener('change', renderLots);
+  document.getElementById('lot-type-filter').addEventListener('change', renderLots);
+  document.getElementById('lot-sort').addEventListener('change', renderLots);
 
   await loadData();
 </script>
