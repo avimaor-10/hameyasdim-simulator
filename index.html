@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- מניעת מטמון בדפדפן בזמן פיתוח -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>סימולטור עסקת קומבינציה ושיתוף | מתחם המייסדים – נס ציונה</title>
 <style>
   :root {
@@ -958,14 +962,7 @@
       </div>
 
       <div id="lot-details" style="display:none; margin-top:20px;">
-        <div class="selected-lot-card">
-          <div class="selected-lot-header">
-            <div class="selected-lot-id" id="lot-title">מגרש</div>
-            <div class="selected-lot-use" id="lot-use">—</div>
-          </div>
-          <div class="lot-icons-row" id="lot-icons-row"></div>
-          <div id="lot-note-container"></div>
-        </div>
+        <!-- כרטיסי המגרשים נוצרים דינמית ע"י displayLotDetails() — כרטיס נפרד לכל מגרש שנבחר -->
       </div>
     </div>
   </div>
@@ -1150,25 +1147,50 @@
         </div>
 
         <div class="mini-stat">
-          <span>יחידות קרקע לדירה במגרש (חלקך)</span>
+          <span>יחידות קרקע שלך במגרשים (חלקך — בעלות + השכרה)</span>
           <span class="val" id="lot-owner-units-full">—</span>
         </div>
         <div class="mini-stat">
-          <span>מתוכן — דירות נטו לבעלות אחרי קומבינציה (~40% משוער)</span>
+          <span>מתוכן — יחידות נטו שלך אחרי קומבינציה (~40% משוער)</span>
           <span class="val" style="color: var(--success); font-size:1.1rem;" id="owner-units">—</span>
         </div>
         <div class="mini-stat">
-          <span>שווי דירה ממוצעת גמורה (94 מ"ר × ₪33,500)</span>
+          <span>שווי דירת בעלות ממוצעת גמורה (94 מ"ר × ₪33,500)</span>
           <span class="val" id="avg-apt-value">₪3,149,000</span>
+        </div>
+        <div class="mini-stat">
+          <span>שווי יח"ד השכרה ארוכת טווח גמורה (94 מ"ר × ₪15,000)</span>
+          <span class="val">₪1,410,000</span>
         </div>
 
         <!-- רצועות ירוקות — דירות גמורות בקומבינציה לכל מגרש בנפרד -->
         <div id="per-lot-combination-strips" style="margin-top:18px;"></div>
 
         <div class="final-value-box">
-          <div class="final-value-label">שווי דירות לבעל הקרקע (ברוטו, כגמור)</div>
-          <div class="final-value-num" id="owner-total-value">₪0</div>
-          <div class="final-value-sub">לפני מס שבח, היטל השבחה, מע"מ על שירותי בנייה ומס מטרו</div>
+          <div class="final-value-label">שווי לבעל הקרקע (ברוטו, כגמור)</div>
+
+          <!-- שני תת-סיכומים: דירות בעלות + יח"ד השכרה -->
+          <div id="value-breakdown-boxes" style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0 18px 0;">
+            <div id="ownership-summary-box" style="display:none; background:rgba(45,122,62,0.35); border:2px solid rgba(255,255,255,0.45); border-radius:12px; padding:16px 14px; text-align:center;">
+              <div style="font-size:2.2rem; line-height:1;">🏠</div>
+              <div style="font-size:0.88rem; opacity:0.95; margin-top:6px; font-weight:600;">דירות בעלות</div>
+              <div id="ownership-units-display" style="font-size:1.45rem; font-weight:800; margin-top:8px; line-height:1.1;">—</div>
+              <div id="ownership-value-display" style="font-size:1.1rem; opacity:0.95; margin-top:4px;">₪0</div>
+            </div>
+            <div id="rental-summary-box" style="display:none; background:rgba(8,145,178,0.4); border:2px solid rgba(255,255,255,0.45); border-radius:12px; padding:16px 14px; text-align:center;">
+              <div style="font-size:2.2rem; line-height:1;">🔑</div>
+              <div style="font-size:0.88rem; opacity:0.95; margin-top:6px; font-weight:600;">יח"ד השכרה ארוכת טווח</div>
+              <div id="rental-units-display" style="font-size:1.45rem; font-weight:800; margin-top:8px; line-height:1.1;">—</div>
+              <div id="rental-value-display" style="font-size:1.1rem; opacity:0.95; margin-top:4px;">₪0</div>
+            </div>
+          </div>
+
+          <!-- סה"כ -->
+          <div style="border-top:2px solid rgba(255,255,255,0.4); padding-top:14px;">
+            <div class="final-value-label" style="font-size:1rem; opacity:0.95;">💰 סה"כ שווי ברוטו</div>
+            <div class="final-value-num" id="owner-total-value">₪0</div>
+            <div class="final-value-sub">לפני מס שבח, היטל השבחה, מע"מ על שירותי בנייה ומס מטרו</div>
+          </div>
 
           <div class="save-btn-wrapper">
             <button class="save-btn" id="save-selection-btn">💾 שמור את הבחירה שלי</button>
@@ -1262,7 +1284,8 @@
     totalOutgoingValue: 7_477_033_842,
     totalIncomingArea: 439_608,
     agriculturalValuePerSqm: 2000,
-    finishedAptValuePerSqm: 33_500,
+    finishedAptValuePerSqm: 33_500,      // דירת בעלות גמורה בשוק (₪/מ"ר פלדלת)
+    rentalValuePerSqm: 15_000,           // יח"ד דיור להשכרה ארוכת טווח גמורה בשוק (₪/מ"ר פלדלת)
     avgApartmentSize: 94,
   };
   // ===== מבנה כלכלי של עסקת הקומבינציה (מבוסס דו"ח האפס בפועל) =====
@@ -1900,46 +1923,58 @@
   // (הפונקציה הישנה הוחלפה ב-selectLotById שמופעלת מלחיצה על המפה)
 
   function displayLotDetails() {
-    if (!currentLot) return;
+    if (!currentLots || !currentLots.length) return;
 
-    document.getElementById('lot-title').textContent = `🗺️ מגרש ${currentLot.id}`;
-    document.getElementById('lot-use').textContent = currentLot.use;
+    const container = document.getElementById('lot-details');
+    let html = '';
 
-    const row = document.getElementById('lot-icons-row');
-    row.innerHTML = '';
-    const addIcon = (icon, val, label) => {
-      const div = document.createElement('div');
-      div.className = 'lot-icon-stat';
-      div.innerHTML = `<span class="icon-big">${icon}</span><div class="stat-val">${val}</div><div class="stat-label">${label}</div>`;
-      row.appendChild(div);
-    };
-    if (currentLot.units > 0) addIcon('🏠', currentLot.units, 'יח"ד בעלות');
-    if (currentLot.rentalUnits > 0) addIcon('🔑', currentLot.rentalUnits, 'יח"ד השכרה');
-    if (currentLot.employment > 0) addIcon('🏢', currentLot.employment.toLocaleString('he-IL'), 'מ"ר תעסוקה');
-    if (currentLot.commerce > 0) addIcon('🛍️', currentLot.commerce.toLocaleString('he-IL'), 'מ"ר מסחר');
-    addIcon('💰', formatNIS(currentLot.outgoingValue), 'שווי מגרש*');
-    addIcon('📐', formatSqm(currentLot.requiredIncomingArea), 'חקלאי נדרש');
+    currentLots.forEach((lot, idx) => {
+      const isMain = (idx === 0);
+      const headerPrefix = isMain ? '📍 מגרש ראשי' : `📍 מגרש נוסף ${idx + 1}`;
 
-    const noteContainer = document.getElementById('lot-note-container');
-    noteContainer.innerHTML = '';
-    if (currentLot.rentalUnits > 0 && currentLot.units === 0) {
-      const div = document.createElement('div');
-      div.className = 'lot-note';
-      div.innerHTML = '⚠️ מגרש <strong>דיור להשכרה</strong> — לא מתאים לקומבינציה רגילה.';
-      noteContainer.appendChild(div);
-    }
-    if (currentLot.phase2Factor < 1) {
-      const div = document.createElement('div');
-      div.className = 'lot-note';
-      div.innerHTML = `⚠️ מגרש ב<strong>שלב ב'</strong> (דחייה לשל עבודות מטרו) — מקדם ${currentLot.phase2Factor.toFixed(2)} מוריד שווי משמעותית.`;
-      noteContainer.appendChild(div);
-    }
-    // הערת מקור בסוף
-    const sourceNote = document.createElement('div');
-    sourceNote.style.cssText = 'font-size:0.78rem; color:var(--text-muted); margin-top:10px; font-style:italic; text-align:center;';
-    sourceNote.innerHTML = '* שווי המגרש על פי דו"ח שמאי האיחוד וחלוקה של תמ"ל 3010';
-    noteContainer.appendChild(sourceNote);
-    document.getElementById('lot-details').style.display = 'block';
+      // תג סוג המגרש (השכרה / מעורב) — בתוך הכותרת
+      const isRentalOnly = lot.rentalUnits > 0 && lot.units === 0;
+      const isMixed      = lot.rentalUnits > 0 && lot.units > 0;
+      let typeBadge = '';
+      if (isRentalOnly) typeBadge = ` <span style="background:#0891b2; color:white; padding:3px 12px; border-radius:14px; font-size:0.75rem; font-weight:600; margin-right:10px;">🔑 דיור להשכרה ארוכת טווח</span>`;
+      else if (isMixed) typeBadge = ` <span style="background:#6366f1; color:white; padding:3px 12px; border-radius:14px; font-size:0.75rem; font-weight:600; margin-right:10px;">🏠🔑 מעורב: בעלות + השכרה</span>`;
+
+      // כרטיסי אייקונים (מספר יח"ד, שווי מגרש וכו')
+      let icons = '';
+      const addIcon = (icon, val, label) => {
+        icons += `<div class="lot-icon-stat"><span class="icon-big">${icon}</span><div class="stat-val">${val}</div><div class="stat-label">${label}</div></div>`;
+      };
+      if (lot.units > 0)       addIcon('🏠', lot.units, 'יח"ד בעלות');
+      if (lot.rentalUnits > 0) addIcon('🔑', lot.rentalUnits, 'יח"ד השכרה');
+      if (lot.employment > 0)  addIcon('🏢', lot.employment.toLocaleString('he-IL'), 'מ"ר תעסוקה');
+      if (lot.commerce > 0)    addIcon('🛍️', lot.commerce.toLocaleString('he-IL'), 'מ"ר מסחר');
+      addIcon('💰', formatNIS(lot.outgoingValue), 'שווי מגרש*');
+      addIcon('📐', formatSqm(lot.requiredIncomingArea), 'חקלאי נדרש');
+
+      // הערות על המגרש
+      let notes = '';
+      if (isRentalOnly) {
+        notes += '<div class="lot-note">⚠️ מגרש <strong>דיור להשכרה ארוכת טווח</strong> — שווי יח"ד שונה מדירת בעלות רגילה (₪15,000/מ"ר במקום ₪33,500/מ"ר).</div>';
+      }
+      if (lot.phase2Factor < 1) {
+        notes += `<div class="lot-note">⚠️ מגרש ב<strong>שלב ב'</strong> (דחייה לעבודות מטרו) — מקדם ${lot.phase2Factor.toFixed(2)} מוריד שווי משמעותית.</div>`;
+      }
+      notes += '<div style="font-size:0.78rem; color:var(--text-muted); margin-top:10px; font-style:italic; text-align:center;">* שווי המגרש על פי דו"ח שמאי האיחוד וחלוקה של תמ"ל 3010</div>';
+
+      html += `
+        <div class="selected-lot-card" style="${isMain ? '' : 'margin-top:14px;'}">
+          <div class="selected-lot-header">
+            <div class="selected-lot-id">${headerPrefix}: 🗺️ מגרש ${lot.id}${typeBadge}</div>
+            <div class="selected-lot-use">${lot.use}</div>
+          </div>
+          <div class="lot-icons-row">${icons}</div>
+          <div>${notes}</div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+    container.style.display = 'block';
   }
 
   function drawPartnershipSVG(youSqm, partnersSqm, totalSqm) {
@@ -2029,25 +2064,43 @@
     // SVG מציג רק את המגרש הראשי
     drawPartnershipSVG(mainAlloc.allocated, mainAlloc.partnersNeeded, mainAlloc.lot.requiredIncomingArea);
 
-    // רצועות ירוקות בתוך כרטיס הקומבינציה — דירות גמורות לכל מגרש בנפרד
+    // רצועות בתוך כרטיס הקומבינציה — דירות / יח"ד השכרה לכל מגרש בנפרד
     const stripsContainer = document.getElementById('per-lot-combination-strips');
     if (stripsContainer) {
       let stripsHtml = '';
       allocations.forEach(a => {
-        if (a.lot.units <= 0) return;  // דלג על מגרשי השכרה בלבד
-        const lotUserUnits = a.lot.units * a.sharePercent;
-        const lotComboUnits = lotUserUnits * COMBINATION_RATE;
-        const lotComboValue = lotComboUnits * PROJECT.avgApartmentSize * PROJECT.finishedAptValuePerSqm;
-        stripsHtml += `
-          <div style="margin-top:10px; padding:14px 18px; background:linear-gradient(135deg,#2d7a3e 0%,#4ca860 100%); color:white; border-radius:10px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
-            <div style="font-size:2.4rem;">🏠</div>
-            <div style="flex:1; min-width:200px;">
-              <div style="font-size:0.85rem; opacity:0.95; margin-bottom:2px;">דירות גמורות בקומבינציה (40% מ-${formatUnits(lotUserUnits)} יח"ק) — ממגרש ${a.lot.id}</div>
-              <div style="font-size:1.5rem; font-weight:800; line-height:1.2;">${formatUnits(lotComboUnits)} דירות נטו</div>
-              <div style="font-size:0.82rem; opacity:0.9; margin-top:4px;">שווי ברוטו (94 מ"ר × ₪33,500): ${formatNIS(lotComboValue)}</div>
+        // רצועה לדירות בעלות (אם המגרש כולל כאלו)
+        if (a.lot.units > 0) {
+          const lotUserUnits  = a.lot.units * a.sharePercent;
+          const lotComboUnits = lotUserUnits * COMBINATION_RATE;
+          const lotComboValue = lotComboUnits * PROJECT.avgApartmentSize * PROJECT.finishedAptValuePerSqm;
+          stripsHtml += `
+            <div style="margin-top:10px; padding:14px 18px; background:linear-gradient(135deg,#2d7a3e 0%,#4ca860 100%); color:white; border-radius:10px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+              <div style="font-size:2.4rem;">🏠</div>
+              <div style="flex:1; min-width:200px;">
+                <div style="font-size:0.85rem; opacity:0.95; margin-bottom:2px;">🏠 <strong>דירות לבעלות</strong> — 40% מ-${formatUnits(lotUserUnits)} יח"ק במגרש ${a.lot.id}</div>
+                <div style="font-size:1.5rem; font-weight:800; line-height:1.2;">${formatUnits(lotComboUnits)} דירות בעלות נטו</div>
+                <div style="font-size:0.82rem; opacity:0.9; margin-top:4px;">שווי ברוטו (94 מ"ר × ₪33,500): ${formatNIS(lotComboValue)}</div>
+              </div>
             </div>
-          </div>
-        `;
+          `;
+        }
+        // רצועה ליח"ד השכרה ארוכת טווח (אם המגרש כולל כאלו)
+        if (a.lot.rentalUnits > 0) {
+          const lotUserRental    = a.lot.rentalUnits * a.sharePercent;
+          const lotComboRental   = lotUserRental * COMBINATION_RATE;
+          const lotRentalValue   = lotComboRental * PROJECT.avgApartmentSize * PROJECT.rentalValuePerSqm;
+          stripsHtml += `
+            <div style="margin-top:10px; padding:14px 18px; background:linear-gradient(135deg,#0891b2 0%,#22b5d4 100%); color:white; border-radius:10px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+              <div style="font-size:2.4rem;">🔑</div>
+              <div style="flex:1; min-width:200px;">
+                <div style="font-size:0.85rem; opacity:0.95; margin-bottom:2px;">יח"ד דיור להשכרה ארוכת טווח בקומבינציה (40% מ-${formatUnits(lotUserRental)} יח"ק) — ממגרש ${a.lot.id}</div>
+                <div style="font-size:1.5rem; font-weight:800; line-height:1.2;">${formatUnits(lotComboRental)} יח"ד השכרה</div>
+                <div style="font-size:0.82rem; opacity:0.9; margin-top:4px;">שווי ברוטו (94 מ"ר × ₪15,000): ${formatNIS(lotRentalValue)}</div>
+              </div>
+            </div>
+          `;
+        }
       });
       stripsContainer.innerHTML = stripsHtml;
     }
@@ -2062,8 +2115,15 @@
     })();
     let breakdownHtml = '';
 
+    // פונקציית עזר — החזרת סימון סוג המגרש (דיור להשכרה / מעורב / בעלות רגילה)
+    const lotTypeBadge = (lot) => {
+      if (lot.units > 0 && lot.rentalUnits > 0) return ' · 🏠🔑 מעורב: בעלות + השכרה ארוכת טווח';
+      if (lot.rentalUnits > 0 && lot.units === 0) return ' · 🔑 דיור להשכרה ארוכת טווח';
+      return ''; // בעלות רגילה — לא צריך סימון
+    };
+
     // הוספת תווית למגרש הראשי
-    const mainLotLabel = `<div style="margin:14px 0 6px 0; padding:8px 14px; background:#1a3a5c; color:white; border-radius:8px; font-weight:700; font-size:0.95rem;">📍 מגרש ראשי: ${mainAlloc.lot.id} ${mainAlloc.sharePercent >= 0.999 ? '· בשלמות בבעלותך' : `· ${(mainAlloc.sharePercent*100).toFixed(1)}% חלקך`}</div>`;
+    const mainLotLabel = `<div style="margin:14px 0 6px 0; padding:8px 14px; background:#1a3a5c; color:white; border-radius:8px; font-weight:700; font-size:0.95rem;">📍 מגרש ראשי: ${mainAlloc.lot.id}${lotTypeBadge(mainAlloc.lot)} ${mainAlloc.sharePercent >= 0.999 ? '· בשלמות בבעלותך' : `· ${(mainAlloc.sharePercent*100).toFixed(1)}% חלקך`}</div>`;
 
     // הוסף את התווית לפני ה-SVG הראשי
     const svgContainer = document.querySelector('#partnership-card .partnership-svg-container');
@@ -2085,7 +2145,7 @@
       breakdownHtml += `
         <div style="margin-top:24px; padding-top:20px; border-top:2px dashed #c9a961;">
           <div style="margin-bottom:10px; padding:8px 14px; background:#c9a961; color:white; border-radius:8px; font-weight:700; font-size:0.95rem;">
-            📍 מגרש נוסף ${i + 1}: ${a.lot.id} ${isWhole ? '· בשלמות בבעלותך' : `· ${(a.sharePercent * 100).toFixed(1)}% חלקך`}
+            📍 מגרש נוסף ${i + 1}: ${a.lot.id}${lotTypeBadge(a.lot)} ${isWhole ? '· בשלמות בבעלותך' : `· ${(a.sharePercent * 100).toFixed(1)}% חלקך`}
           </div>
 
           <!-- תרשים בר ויזואלי כמו במגרש הראשי -->
@@ -2152,13 +2212,33 @@
 
     // (כרטיס "הזכויות שלך במגרש" הוסר — הנתונים הללו מופיעים בשלב 3 ובכרטיס המגרש)
 
-    // ===== Combination — לפי סך יח"ד מאוגרגות =====
-    const combinationUnits = totalUnits * COMBINATION_RATE;
-    const avgAptValue = PROJECT.avgApartmentSize * PROJECT.finishedAptValuePerSqm;
-    const combinationValue = combinationUnits * avgAptValue;
+    // ===== Combination — לפי סך יח"ד מאוגרגות (בעלות + השכרה ארוכת טווח) =====
+    const combinationUnits       = totalUnits * COMBINATION_RATE;
+    const combinationRentalUnits = totalRentalUnits * COMBINATION_RATE;
+    const avgAptValue     = PROJECT.avgApartmentSize * PROJECT.finishedAptValuePerSqm;
+    const avgRentalValue  = PROJECT.avgApartmentSize * PROJECT.rentalValuePerSqm;
+    const combinationValue       = combinationUnits * avgAptValue;
+    const combinationRentalValue = combinationRentalUnits * avgRentalValue;
+    const combinationTotalValue  = combinationValue + combinationRentalValue;
 
-    document.getElementById('lot-owner-units-full').textContent = totalUnits > 0 ? formatUnits(totalUnits) + ' יח"ק' : '— (אין יח"ד בבעלות)';
-    document.getElementById('owner-units').textContent = combinationUnits > 0 ? formatUnits(combinationUnits) + ' דירות נטו' : '— לא רלוונטי';
+    // תצוגה מצרפית של יח"ק (בעלות + השכרה)
+    const totalAllUnits = totalUnits + totalRentalUnits;
+    let unitsText = '— (אין יח"ד בבעלות)';
+    if (totalAllUnits > 0) {
+      const parts = [];
+      if (totalUnits > 0)       parts.push(formatUnits(totalUnits) + ' יח"ק בעלות');
+      if (totalRentalUnits > 0) parts.push(formatUnits(totalRentalUnits) + ' יח"ק השכרה');
+      unitsText = parts.join(' + ');
+    }
+    document.getElementById('lot-owner-units-full').textContent = unitsText;
+
+    // תצוגה מצרפית של דירות נטו אחרי קומבינציה
+    let ownerUnitsText = '— לא רלוונטי';
+    const ownerParts = [];
+    if (combinationUnits > 0)       ownerParts.push(formatUnits(combinationUnits) + ' דירות בעלות');
+    if (combinationRentalUnits > 0) ownerParts.push(formatUnits(combinationRentalUnits) + ' יח"ד השכרה');
+    if (ownerParts.length) ownerUnitsText = ownerParts.join(' + ');
+    document.getElementById('owner-units').textContent = ownerUnitsText;
     // ===== כרטיס שלב 3 — חלקך במגרש =====
     document.getElementById('owner-share-value').textContent = formatNIS(totalLotValue);
     document.getElementById('owner-units-count').textContent = totalUnits > 0 ? `${formatUnits(totalUnits)} יח"ק לדירה` : '— יח"ק לדירה';
@@ -2171,7 +2251,39 @@
       document.getElementById('lot-share-percent').textContent = breakdown;
     }
     document.getElementById('avg-apt-value').textContent = formatNIS(avgAptValue);
-    document.getElementById('owner-total-value').textContent = formatNIS(combinationValue);
+    document.getElementById('owner-total-value').textContent = formatNIS(combinationTotalValue);
+
+    // עדכון תת-סיכום דירות בעלות
+    const ownershipBox = document.getElementById('ownership-summary-box');
+    if (ownershipBox) {
+      if (combinationUnits > 0) {
+        ownershipBox.style.display = 'block';
+        document.getElementById('ownership-units-display').textContent = `${formatUnits(combinationUnits)} דירות`;
+        document.getElementById('ownership-value-display').textContent = formatNIS(combinationValue);
+      } else {
+        ownershipBox.style.display = 'none';
+      }
+    }
+
+    // עדכון תת-סיכום יח"ד השכרה
+    const rentalBox = document.getElementById('rental-summary-box');
+    if (rentalBox) {
+      if (combinationRentalUnits > 0) {
+        rentalBox.style.display = 'block';
+        document.getElementById('rental-units-display').textContent = `${formatUnits(combinationRentalUnits)} יח"ד`;
+        document.getElementById('rental-value-display').textContent = formatNIS(combinationRentalValue);
+      } else {
+        rentalBox.style.display = 'none';
+      }
+    }
+
+    // התאמת גריד — אם רק אחד מהשניים מוצג, התיבה תתפוס את כל הרוחב
+    const breakdownGrid = document.getElementById('value-breakdown-boxes');
+    if (breakdownGrid) {
+      const ownershipVisible = combinationUnits > 0;
+      const rentalVisible = combinationRentalUnits > 0;
+      breakdownGrid.style.gridTemplateColumns = (ownershipVisible && rentalVisible) ? '1fr 1fr' : '1fr';
+    }
 
     document.getElementById('partnership-card').style.display = 'block';
     document.getElementById('combination-card').style.display = 'block';
@@ -2191,9 +2303,14 @@
       input_area: Number(document.getElementById('area').value) || null,
       signed_with_mor: document.getElementById('signed-with-mor').checked,
       total_lot_value: totalLotValue,
-      total_units_equivalent: totalUnits,
-      combination_apartments: combinationUnits,
-      combination_gross_value: combinationValue,
+      total_units_equivalent: totalUnits + totalRentalUnits,
+      combination_apartments: combinationUnits + combinationRentalUnits,
+      combination_gross_value: combinationTotalValue,
+      // פירוט מלא של התוצאה (לעתיד — במידה ונרצה לפצל בדשבורד)
+      combination_ownership_units: combinationUnits,
+      combination_rental_units: combinationRentalUnits,
+      combination_ownership_value: combinationValue,
+      combination_rental_value: combinationRentalValue,
       timestamp: new Date().toISOString(),
     };
 
