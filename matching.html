@@ -408,9 +408,10 @@
   <div class="intro">
     <h2>💡 מטרת הכלי</h2>
     <p>
-      מיפוי כל 43 החלקות החקלאיות בגוש 3852 (תמ"ל 3010) והצגת סטטוס הבעלים הרשומים במערכת לכל חלקה.
-      <strong>ירוק</strong> = כל החלקה מכוסה · <strong>צהוב</strong> = חסרים בעלים (המשך חיפוש מומלץ) · <strong>אפור</strong> = עדיין אין בעלים רשומים.
-      הכלי מסייע לזהות לאילו חלקות דרושים בעלים נוספים כדי להציג בפני שמאי התוכנית הסכם שלם ולקבל מגרש סחיר מלא.
+      מעקב מבוסס על <strong>רשימת הבעלים החתומים איתנו</strong> (הסכם ניהול עם קבוצת חנן מור).
+      <strong>חלקות מקור</strong>: לכל חלקה — כמה מבין החתומים עשו בחירה בסימולטור.
+      <strong>מגרשים סחירים</strong>: לכל מגרש — כמה שטח חקלאי חסר להשלמתו ומי תרם עד כה (ומאיזו חלקת מקור).
+      המטרה: לוודא שכל חתום עושה בחירה וכל מגרש סחיר מכוסה במלואו.
     </p>
   </div>
 
@@ -420,20 +421,20 @@
       <div class="value" id="stat-total">-</div>
     </div>
     <div class="stat-card full">
-      <div class="label">חלקות מכוסות במלואן</div>
+      <div class="label">חלקות שכל החתומים בחרו</div>
       <div class="value" id="stat-full">-</div>
     </div>
     <div class="stat-card partial">
-      <div class="label">חלקות חלקיות</div>
+      <div class="label">חלקות שרק חלק בחרו</div>
       <div class="value" id="stat-partial">-</div>
     </div>
     <div class="stat-card missing">
-      <div class="label">חלקות ללא בעלים רשומים</div>
+      <div class="label">חלקות שאף חתום לא בחר</div>
       <div class="value" id="stat-missing">-</div>
     </div>
     <div class="stat-card">
-      <div class="label">שטח חסר סה"כ (מ"ר)</div>
-      <div class="value" id="stat-gap" style="font-size:1.3rem;">-</div>
+      <div class="label">חתומים שעדיין לא בחרו</div>
+      <div class="value" id="stat-gap" style="font-size:1.8rem;">-</div>
     </div>
   </div>
 
@@ -445,20 +446,16 @@
   <!-- טאב 1: חלקות מקור -->
   <div class="tab-content active" id="tab-parcels">
     <div class="controls-bar">
-      <input type="text" id="search-input" placeholder="🔍 חיפוש מספר חלקה או שם בעל...">
+      <input type="text" id="search-input" placeholder="🔍 חיפוש מספר חלקה או שם חתום...">
       <select id="status-filter">
-        <option value="">כל הסטטוסים</option>
-        <option value="full">מכוסה במלואה</option>
-        <option value="partial">חלקית</option>
-        <option value="missing">ללא בעלים</option>
+        <option value="">כל החלקות</option>
+        <option value="full">כל החתומים בחרו</option>
+        <option value="partial">חלק בחרו</option>
+        <option value="missing">אף חתום לא בחר / אין חתומים</option>
       </select>
-      <label>
-        <input type="checkbox" id="include-pending-cb" checked>
-        כלול משתמשים ממתינים לאישור
-      </label>
       <select id="sort-select">
         <option value="parcel">מיון לפי מס' חלקה</option>
-        <option value="gap-desc">חלקות עם פער גדול תחילה</option>
+        <option value="gap-desc">חלקות עם הכי הרבה חתומים שלא בחרו</option>
         <option value="area-desc">חלקות גדולות תחילה</option>
       </select>
     </div>
@@ -598,16 +595,27 @@
 
   let allParcels = [];
   let allProfiles = {};
-  let allSelections = [];  // כל הבחירות שהמשתמשים שמרו
+  let allSelections = [];       // כל הבחירות השמורות של המשתמשים
+  let allSignedOwners = [];     // רשימת הבעלים החתומים על הסכם ניהול
+  let profileByNormalizedId = new Map();  // ת"ז מנורמל → profile
+  let selectionByUserId = new Map();      // user_id → selection
+
+  // ניקוי ת"ז להצלבה (הסרת אפסים מובילים + רווחים)
+  const normalizeId = s => s ? String(s).trim().replace(/^0+/, '') : '';
+
+  function safeParse(s) {
+    try { return JSON.parse(s); } catch { return {}; }
+  }
 
   async function loadData() {
-    const [parcelsRes, profilesRes, selectionsRes] = await Promise.all([
+    const [parcelsRes, profilesRes, selectionsRes, signedRes] = await Promise.all([
       supabase.from('user_parcels').select('*'),
-      supabase.from('profiles').select('id, full_name, email, phone, approval_status'),
+      supabase.from('profiles').select('id, full_name, email, phone, approval_status, id_number'),
       supabase.from('selections').select('*').eq('is_current', true),
+      supabase.from('signed_owners').select('*').eq('is_active', true),
     ]);
 
-    if (parcelsRes.error || profilesRes.error) {
+    if (parcelsRes.error || profilesRes.error || signedRes.error) {
       document.getElementById('content').innerHTML =
         `<div style="text-align:center;padding:40px;color:#dc2626;">שגיאה בטעינה</div>`;
       return;
@@ -615,67 +623,87 @@
 
     allParcels = parcelsRes.data || [];
     allProfiles = {};
-    (profilesRes.data || []).forEach(p => { allProfiles[p.id] = p; });
+    profileByNormalizedId = new Map();
+    (profilesRes.data || []).forEach(p => {
+      allProfiles[p.id] = p;
+      const nid = normalizeId(p.id_number);
+      if (nid) profileByNormalizedId.set(nid, p);
+    });
     allSelections = selectionsRes.data || [];
+    selectionByUserId = new Map(allSelections.map(s => [s.user_id, s]));
+    allSignedOwners = signedRes.data || [];
 
     render();
     renderLots();
   }
 
+  // עבור חתום ברשימה — החזרת הפרופיל (אם נרשם) והבחירה (אם קיימת)
+  function getSignerStatus(signer) {
+    const nid = normalizeId(signer.id_number);
+    const profile = nid ? profileByNormalizedId.get(nid) : null;
+    const selection = profile ? selectionByUserId.get(profile.id) : null;
+    return {
+      isRegistered: !!profile,
+      hasSelected: !!selection,
+      profile,
+      selection,
+    };
+  }
+
   function render() {
     const search = document.getElementById('search-input').value.trim().toLowerCase();
     const status = document.getElementById('status-filter').value;
-    const includePending = document.getElementById('include-pending-cb').checked;
     const sort = document.getElementById('sort-select').value;
 
-    // חישוב סטטוס לכל חלקה
+    // חישוב סטטוס לכל חלקה — מבוסס על חתומים (signed_owners)
     const parcelStatus = PARCELS.map(p => {
-      // בעלים רלוונטיים לחלקה הזו (block=3852)
-      let owners = allParcels.filter(up => up.block === 3852 && up.parcel === p.parcel);
-      if (!includePending) {
-        owners = owners.filter(up => {
-          const prof = allProfiles[up.user_id];
-          return prof && prof.approval_status === 'approved';
-        });
-      }
-      const coveredArea = owners.reduce((s, up) => s + Number(up.area_owned || 0), 0);
-      // ההשלמה נמדדת מול השטח הנכלל בעסקה (includedArea) — זה מה שמשתתף באיחוד והחלוקה
-      const targetArea = p.includedArea;
-      const gap = Math.max(0, targetArea - coveredArea);
-      const coverage = targetArea > 0 ? coveredArea / targetArea : 0;
+      // כל החתומים איתנו בחלקה זו (גוש 3852)
+      const signers = allSignedOwners.filter(s => s.gush === 3852 && s.parcel === p.parcel);
+
+      // חישוב סטטוס לכל חתום
+      const signersStatus = signers.map(s => ({
+        signer: s,
+        ...getSignerStatus(s),
+      }));
+
+      const totalSigners = signers.length;
+      const registeredCount = signersStatus.filter(x => x.isRegistered).length;
+      const selectedCount = signersStatus.filter(x => x.hasSelected).length;
+      const gap = totalSigners - selectedCount;  // חתומים שעדיין לא בחרו
+      const coverage = totalSigners > 0 ? selectedCount / totalSigners : 0;
 
       let statusClass, statusLabel;
-      if (owners.length === 0) {
+      if (totalSigners === 0) {
         statusClass = 'missing';
-        statusLabel = 'ללא בעלים';
-      } else if (coverage >= 0.995) {
+        statusLabel = 'אין חתומים איתנו';
+      } else if (selectedCount === totalSigners) {
         statusClass = 'full';
-        statusLabel = 'מכוסה במלואה';
+        statusLabel = 'כל החתומים בחרו';
+      } else if (selectedCount === 0) {
+        statusClass = 'missing';
+        statusLabel = 'אף חתום לא בחר';
       } else {
         statusClass = 'partial';
-        statusLabel = 'חלקית';
+        statusLabel = `${selectedCount}/${totalSigners} בחרו`;
       }
 
-      return { parcel: p, owners, coveredArea, gap, coverage, statusClass, statusLabel };
+      return { parcel: p, signersStatus, totalSigners, registeredCount, selectedCount, gap, coverage, statusClass, statusLabel };
     });
 
     // סטטיסטיקות
     document.getElementById('stat-total').textContent = PARCELS.length;
-    document.getElementById('stat-full').textContent = parcelStatus.filter(p => p.statusClass === 'full').length;
-    document.getElementById('stat-partial').textContent = parcelStatus.filter(p => p.statusClass === 'partial').length;
-    document.getElementById('stat-missing').textContent = parcelStatus.filter(p => p.statusClass === 'missing').length;
-    const totalGap = parcelStatus.reduce((s, p) => s + p.gap, 0);
-    document.getElementById('stat-gap').textContent = totalGap.toLocaleString('he-IL');
+    document.getElementById('stat-full').textContent = parcelStatus.filter(p => p.totalSigners > 0 && p.selectedCount === p.totalSigners).length;
+    document.getElementById('stat-partial').textContent = parcelStatus.filter(p => p.selectedCount > 0 && p.selectedCount < p.totalSigners).length;
+    document.getElementById('stat-missing').textContent = parcelStatus.filter(p => p.totalSigners > 0 && p.selectedCount === 0).length;
+    const totalSignersNotSelected = parcelStatus.reduce((s, p) => s + p.gap, 0);
+    document.getElementById('stat-gap').textContent = totalSignersNotSelected.toLocaleString('he-IL');
 
     // סינון
     let filtered = parcelStatus;
     if (search) {
       filtered = filtered.filter(ps => {
         if (String(ps.parcel.parcel).includes(search)) return true;
-        return ps.owners.some(up => {
-          const prof = allProfiles[up.user_id];
-          return prof && (prof.full_name || '').toLowerCase().includes(search);
-        });
+        return ps.signersStatus.some(x => (x.signer.owner_name || '').toLowerCase().includes(search));
       });
     }
     if (status) filtered = filtered.filter(ps => ps.statusClass === status);
@@ -696,17 +724,25 @@
       <div class="parcels-grid">
         ${filtered.map(ps => {
           const coveragePct = Math.round(ps.coverage * 100);
-          const ownersHtml = ps.owners.length
-            ? ps.owners.map(up => {
-                const prof = allProfiles[up.user_id] || { full_name: 'משתמש לא ידוע', approval_status: 'pending' };
-                const pendingClass = prof.approval_status !== 'approved' ? ' pending' : '';
+
+          const signersHtml = ps.signersStatus.length
+            ? ps.signersStatus.map(x => {
+                const s = x.signer;
+                let icon, color;
+                if (x.hasSelected) { icon = '✅'; color = '#065f46'; }
+                else if (x.isRegistered) { icon = '📝'; color = '#92400e'; }
+                else { icon = '⏸️'; color = '#6b7280'; }
+                const statusText = x.hasSelected ? 'בחר' : (x.isRegistered ? 'נרשם — עדיין לא בחר' : 'עדיין לא נרשם');
                 return `
-                  <div class="owner-row${pendingClass}">
-                    <span class="name">${prof.full_name}</span>
-                    <span class="area">${Number(up.area_owned).toLocaleString('he-IL')} מ"ר</span>
+                  <div class="owner-row" style="border-bottom:1px dashed #e5e7eb;padding:6px 0;font-size:0.88rem;">
+                    <span class="name" style="display:inline-flex;align-items:center;gap:6px;">
+                      <span>${icon}</span>
+                      <span>${s.owner_name}</span>
+                    </span>
+                    <span style="color:${color};font-size:0.78rem;font-weight:600;">${statusText}</span>
                   </div>`;
               }).join('')
-            : '<div class="no-owners">אין בעלים רשומים במערכת</div>';
+            : '<div class="no-owners" style="color:#9ca3af;text-align:center;padding:10px 0;">אין בעלים חתומים ברשימה שלנו בחלקה זו</div>';
 
           return `
             <div class="parcel-card ${ps.statusClass}">
@@ -719,21 +755,21 @@
               </div>
               <div class="parcel-stats">
                 <div class="parcel-stat">
-                  <div class="label">שטח רשום / נכלל בעסקה</div>
-                  <div class="value">${ps.parcel.totalArea.toLocaleString('he-IL')}${ps.parcel.totalArea !== ps.parcel.includedArea ? ` / <span style="color:#d97706;">${ps.parcel.includedArea.toLocaleString('he-IL')}</span>` : ''} מ"ר</div>
+                  <div class="label">חתומים איתנו בחלקה</div>
+                  <div class="value">${ps.totalSigners}</div>
                 </div>
                 <div class="parcel-stat">
-                  <div class="label">מכוסה ע"י בעלים</div>
-                  <div class="value">${ps.coveredArea.toLocaleString('he-IL')} מ"ר (${coveragePct}%)</div>
+                  <div class="label">מהם עשו בחירה</div>
+                  <div class="value" style="color:${ps.selectedCount === ps.totalSigners && ps.totalSigners > 0 ? 'var(--success)' : ps.selectedCount > 0 ? 'var(--warning)' : 'var(--text-muted)'};">${ps.selectedCount} / ${ps.totalSigners}</div>
                 </div>
               </div>
               <div class="owners-list">
-                <div class="owners-title">בעלים רשומים (${ps.owners.length})</div>
-                ${ownersHtml}
+                <div class="owners-title">בעלים חתומים (${ps.totalSigners})</div>
+                ${signersHtml}
               </div>
-              ${ps.gap > 0 ? `
+              ${ps.totalSigners > 0 && ps.selectedCount < ps.totalSigners ? `
                 <div class="gap-note">
-                  <strong>🎯 פער להשלמה:</strong> ${ps.gap.toLocaleString('he-IL')} מ"ר נוספים דרושים להסכם שיתוף מלא
+                  <strong>🎯 עדיין לא בחרו:</strong> ${ps.gap} חתומים מבין ${ps.totalSigners} בחלקה זו
                 </div>
               ` : ''}
             </div>
@@ -752,12 +788,20 @@
     const typeFilter = document.getElementById('lot-type-filter').value;
     const sort = document.getElementById('lot-sort').value;
 
-    // בניית מפה: lot_id → מערך של תורמים {userId, name, area, sharePercent, approval_status}
+    // בניית מפה: lot_id → מערך של תורמים {userId, name, area, sharePercent, sourceParcel, approval_status}
     const contributorsByLot = {};
     allSelections.forEach(sel => {
       const profile = allProfiles[sel.user_id];
       if (!profile) return;
       const lots = Array.isArray(sel.selected_lots) ? sel.selected_lots : [];
+      // חלקת המקור מהבחירה (נשמרת כ-JSON string בשדה notes)
+      const selNotes = typeof sel.notes === 'string' ? safeParse(sel.notes) : (sel.notes || {});
+      const sourceParcel = selNotes.input_parcel;
+      const sourceBlock = selNotes.input_block || 3852;
+      // האם המשתמש חתום איתנו? (הצלבה לפי ת"ז)
+      const nid = normalizeId(profile.id_number);
+      const isSigner = nid && allSignedOwners.some(s => normalizeId(s.id_number) === nid);
+
       lots.forEach(l => {
         if (!contributorsByLot[l.lot_id]) contributorsByLot[l.lot_id] = [];
         contributorsByLot[l.lot_id].push({
@@ -766,6 +810,9 @@
           approval_status: profile.approval_status,
           area: +l.allocated_area || 0,
           sharePercent: +l.share_percent || 0,
+          sourceBlock,
+          sourceParcel,
+          isSigner,
         });
       });
     });
@@ -820,12 +867,21 @@
                 .sort((a, b) => b.area - a.area)
                 .map(c => {
                   const pendingNote = c.approval_status !== 'approved' ? ' ⏳' : '';
+                  const signerBadge = c.isSigner
+                    ? '<span style="background:#ecfdf5;color:#065f46;padding:1px 6px;border-radius:8px;font-size:0.7rem;font-weight:600;margin-right:4px;border:1px solid #a7f3d0;">✓ חתום</span>'
+                    : '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:0.7rem;font-weight:600;margin-right:4px;border:1px solid #fcd34d;">⚠ לא חתום</span>';
+                  const sourceInfo = c.sourceParcel
+                    ? `<span style="color:var(--text-muted);font-size:0.78rem;">מחלקה ${c.sourceBlock}/${c.sourceParcel}</span>`
+                    : '<span style="color:#9ca3af;font-size:0.78rem;">חלקה לא ידועה</span>';
                   return `
-                    <div class="contributor-row">
-                      <span class="name">${c.name}${pendingNote}</span>
-                      <span>
-                        <span class="percent">(${(c.sharePercent * 100).toFixed(1)}% מהמגרש)</span>
+                    <div class="contributor-row" style="flex-wrap:wrap;gap:6px;">
+                      <span class="name" style="flex:1;min-width:160px;">
+                        ${c.name}${pendingNote}${signerBadge}
+                        <div style="margin-top:2px;">${sourceInfo}</div>
+                      </span>
+                      <span style="text-align:left;">
                         <span class="area">${Math.round(c.area).toLocaleString('he-IL')} מ"ר</span>
+                        <div class="percent">(${(c.sharePercent * 100).toFixed(1)}% מהמגרש)</div>
                       </span>
                     </div>`;
                 }).join('')
@@ -882,7 +938,6 @@
   // מאזינים - טאב חלקות מקור
   document.getElementById('search-input').addEventListener('input', render);
   document.getElementById('status-filter').addEventListener('change', render);
-  document.getElementById('include-pending-cb').addEventListener('change', render);
   document.getElementById('sort-select').addEventListener('change', render);
 
   // מאזינים - טאב מגרשים סחירים
