@@ -388,6 +388,150 @@
     text-align: center;
     font-weight: 600;
   }
+
+  /* תג סוג בעלים בחלקה */
+  .owner-type-tag {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-right: 6px;
+    border: 1px solid transparent;
+  }
+  .owner-type-tag.signed {
+    background: #ecfdf5;
+    color: #065f46;
+    border-color: #a7f3d0;
+  }
+  .owner-type-tag.joined {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fcd34d;
+  }
+
+  /* כפתור הוספת בעלים לחלקה */
+  .add-owner-btn {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    margin-top: 10px;
+    background: var(--primary-light);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .add-owner-btn:hover { background: var(--primary); }
+
+  /* מודל הוספת בעלים */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 28px 32px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  }
+  .modal h2 {
+    font-size: 1.15rem;
+    color: var(--primary);
+    margin-bottom: 6px;
+  }
+  .modal .modal-subtitle {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+  }
+  .modal-field {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 14px;
+  }
+  .modal-field label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .modal-field input, .modal-field select {
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  .modal-field input:focus, .modal-field select:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+  .modal-field .hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .modal-actions button {
+    padding: 9px 20px;
+    border-radius: 6px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-save {
+    background: var(--success);
+    color: white;
+  }
+  .btn-save:hover { background: #1f5c30; }
+  .btn-save:disabled { opacity: 0.6; cursor: wait; }
+  .btn-cancel {
+    background: #e5e7eb;
+    color: var(--text);
+  }
+  .btn-cancel:hover { background: #d1d5db; }
+  .modal-status {
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 0.88rem;
+    display: none;
+  }
+  .modal-status.error {
+    display: block;
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  .modal-status.success {
+    display: block;
+    background: #d1fae5;
+    color: #065f46;
+  }
 </style>
 </head>
 <body>
@@ -734,6 +878,15 @@
                 else { icon = '⏸️'; color = '#6b7280'; }
                 const statusText = x.hasSelected ? 'בחר' : (x.isRegistered ? 'נרשם — עדיין לא בחר' : 'עדיין לא נרשם');
 
+                // תג סוג בעלים
+                const ownerTypeTag = s.is_signed === false
+                  ? '<span class="owner-type-tag joined">➕ הצטרף חדש</span>'
+                  : '<span class="owner-type-tag signed">✓ חתום</span>';
+
+                // שטח הבעלים בחלקה
+                const ownerArea = s.agreement_area || s.plan_area || null;
+                const areaText = ownerArea ? `${Math.round(ownerArea).toLocaleString('he-IL')} מ"ר` : '';
+
                 // אם המשתמש שנרשם עם הת"ז הזו הוא בשם שונה מהחתום — להציג אזהרה
                 const profileName = x.profile ? x.profile.full_name : null;
                 const nameMismatch = profileName && profileName.trim() !== s.owner_name.trim();
@@ -748,12 +901,22 @@
                     <span class="name" style="display:inline-flex;align-items:center;gap:6px;flex:1;min-width:180px;">
                       <span>${icon}</span>
                       <span>${s.owner_name}</span>
+                      ${ownerTypeTag}
                     </span>
-                    <span style="color:${color};font-size:0.78rem;font-weight:600;">${statusText}</span>
+                    <span style="text-align:left;">
+                      ${areaText ? `<span style="color:var(--primary);font-weight:600;font-size:0.82rem;">${areaText}</span><br>` : ''}
+                      <span style="color:${color};font-size:0.75rem;font-weight:600;">${statusText}</span>
+                    </span>
                     ${subInfo ? `<div style="flex-basis:100%;">${subInfo}</div>` : ''}
                   </div>`;
               }).join('')
-            : '<div class="no-owners" style="color:#9ca3af;text-align:center;padding:10px 0;">אין בעלים חתומים ברשימה שלנו בחלקה זו</div>';
+            : '<div class="no-owners" style="color:#9ca3af;text-align:center;padding:10px 0;">אין בעלים ברשימה שלנו בחלקה זו</div>';
+
+          // סיכום שטחים
+          const totalOwnerArea = ps.signersStatus.reduce((sum, x) => sum + Number(x.signer.agreement_area || x.signer.plan_area || 0), 0);
+          const areaGap = ps.parcel.includedArea - totalOwnerArea;
+          const signedCount = ps.signersStatus.filter(x => x.signer.is_signed !== false).length;
+          const joinedCount = ps.signersStatus.filter(x => x.signer.is_signed === false).length;
 
           return `
             <div class="parcel-card ${ps.statusClass}">
@@ -766,21 +929,30 @@
               </div>
               <div class="parcel-stats">
                 <div class="parcel-stat">
-                  <div class="label">חתומים איתנו בחלקה</div>
-                  <div class="value">${ps.totalSigners}</div>
+                  <div class="label">שטח חלקה (כולל / נכלל)</div>
+                  <div class="value" style="font-size:0.95rem;">${ps.parcel.totalArea.toLocaleString('he-IL')}${ps.parcel.totalArea !== ps.parcel.includedArea ? ` / <span style="color:var(--warning);">${ps.parcel.includedArea.toLocaleString('he-IL')}</span>` : ''} מ"ר</div>
+                </div>
+                <div class="parcel-stat">
+                  <div class="label">בעלים ברשימה שלנו</div>
+                  <div class="value" style="font-size:0.95rem;">${ps.totalSigners}${joinedCount > 0 ? ` <span style="color:var(--warning);font-size:0.78rem;">(${signedCount} חתומים + ${joinedCount} חדשים)</span>` : ''}</div>
+                </div>
+                <div class="parcel-stat">
+                  <div class="label">סה"כ שטח בעלים ברשימה</div>
+                  <div class="value" style="font-size:0.95rem;">${Math.round(totalOwnerArea).toLocaleString('he-IL')} מ"ר${areaGap > 1 ? ` <span style="color:var(--warning);font-size:0.78rem;">(חסר ${Math.round(areaGap).toLocaleString('he-IL')})</span>` : areaGap < -1 ? ` <span style="color:#9ca3af;font-size:0.78rem;">(עודף ${Math.round(-areaGap).toLocaleString('he-IL')})</span>` : ''}</div>
                 </div>
                 <div class="parcel-stat">
                   <div class="label">מהם עשו בחירה</div>
-                  <div class="value" style="color:${ps.selectedCount === ps.totalSigners && ps.totalSigners > 0 ? 'var(--success)' : ps.selectedCount > 0 ? 'var(--warning)' : 'var(--text-muted)'};">${ps.selectedCount} / ${ps.totalSigners}</div>
+                  <div class="value" style="color:${ps.selectedCount === ps.totalSigners && ps.totalSigners > 0 ? 'var(--success)' : ps.selectedCount > 0 ? 'var(--warning)' : 'var(--text-muted)'};font-size:0.95rem;">${ps.selectedCount} / ${ps.totalSigners}</div>
                 </div>
               </div>
               <div class="owners-list">
-                <div class="owners-title">בעלים חתומים (${ps.totalSigners})</div>
+                <div class="owners-title">בעלים ברשימה (${ps.totalSigners})</div>
                 ${signersHtml}
               </div>
+              <button class="add-owner-btn" data-parcel="${ps.parcel.parcel}">➕ הוסף בעלים לחלקה</button>
               ${ps.totalSigners > 0 && ps.selectedCount < ps.totalSigners ? `
                 <div class="gap-note">
-                  <strong>🎯 עדיין לא בחרו:</strong> ${ps.gap} חתומים מבין ${ps.totalSigners} בחלקה זו
+                  <strong>🎯 עדיין לא בחרו:</strong> ${ps.gap} בעלים מבין ${ps.totalSigners} בחלקה זו
                 </div>
               ` : ''}
             </div>
@@ -957,8 +1129,163 @@
   document.getElementById('lot-type-filter').addEventListener('change', renderLots);
   document.getElementById('lot-sort').addEventListener('change', renderLots);
 
+  // ============================================================
+  // מודל הוספת בעלים חדש לחלקה
+  // ============================================================
+  const addModal = document.getElementById('add-owner-modal');
+  const addStatus = document.getElementById('add-owner-status');
+  let addingToParcel = null;
+
+  function openAddOwnerModal(parcelNum) {
+    addingToParcel = parcelNum;
+    document.getElementById('add-owner-subtitle').textContent = `גוש 3852 · חלקה ${parcelNum}`;
+    // איפוס טופס
+    document.getElementById('new-owner-name').value = '';
+    document.getElementById('new-owner-id').value = '';
+    document.getElementById('new-owner-area').value = '';
+    document.getElementById('new-owner-signed').value = 'false';
+    document.getElementById('new-owner-action').value = '';
+    document.getElementById('new-owner-note').value = '';
+    addStatus.className = 'modal-status';
+    addStatus.textContent = '';
+    addModal.classList.add('visible');
+    setTimeout(() => document.getElementById('new-owner-name').focus(), 100);
+  }
+
+  function closeAddOwnerModal() {
+    addModal.classList.remove('visible');
+    addingToParcel = null;
+  }
+
+  async function saveNewOwner() {
+    const name = document.getElementById('new-owner-name').value.trim();
+    const idNumber = document.getElementById('new-owner-id').value.trim();
+    const area = Number(document.getElementById('new-owner-area').value);
+    const isSigned = document.getElementById('new-owner-signed').value === 'true';
+    const actionType = document.getElementById('new-owner-action').value.trim();
+    const note = document.getElementById('new-owner-note').value.trim();
+
+    // ולידציה
+    if (!name) { showAddStatus('יש להזין שם מלא', 'error'); return; }
+    if (!area || area < 1) { showAddStatus('יש להזין שטח בחלקה (מ"ר)', 'error'); return; }
+    if (!addingToParcel) { showAddStatus('שגיאה: חלקה לא נבחרה', 'error'); return; }
+
+    const saveBtn = document.getElementById('add-owner-save');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'שומר...';
+
+    try {
+      // ת"ז — נירמול ל-9 ספרות אם זה מספרי
+      let normalizedIdNumber = null;
+      if (idNumber) {
+        normalizedIdNumber = /^\d+$/.test(idNumber) ? idNumber.padStart(9, '0') : idNumber;
+      }
+
+      const { error } = await supabase.from('signed_owners').insert({
+        gush: 3852,
+        parcel: addingToParcel,
+        owner_name: name,
+        id_number: normalizedIdNumber,
+        plan_area: area,
+        agreement_area: area,
+        unification_area: area,
+        action_type: actionType || null,
+        tabu_status: null,
+        note: note || (isSigned ? null : 'הצטרף חדש — לא חתום על הסכם ניהול מקורי'),
+        is_signed: isSigned,
+        is_active: true,
+        source_version: 'הוסף ידנית דרך הדשבורד',
+      });
+
+      if (error) throw error;
+
+      showAddStatus('✅ נוסף בהצלחה!', 'success');
+      saveBtn.textContent = '✓ נשמר';
+
+      // טעינה מחדש של הנתונים + סגירת מודל אחרי שנייה
+      await loadData();
+      setTimeout(() => {
+        closeAddOwnerModal();
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 שמור';
+      }, 1200);
+    } catch (err) {
+      showAddStatus('שגיאה בשמירה: ' + (err.message || 'לא ידועה'), 'error');
+      saveBtn.disabled = false;
+      saveBtn.textContent = '💾 שמור';
+    }
+  }
+
+  function showAddStatus(msg, type) {
+    addStatus.textContent = msg;
+    addStatus.className = 'modal-status ' + type;
+  }
+
+  // מאזינים למודל
+  document.getElementById('add-owner-save').addEventListener('click', saveNewOwner);
+  document.getElementById('add-owner-cancel').addEventListener('click', closeAddOwnerModal);
+  addModal.addEventListener('click', (e) => {
+    if (e.target === addModal) closeAddOwnerModal();
+  });
+
+  // האזנה לכפתורי "הוסף בעלים" (event delegation — כי הכפתורים נוצרים דינמית)
+  document.getElementById('content').addEventListener('click', (e) => {
+    const btn = e.target.closest('.add-owner-btn');
+    if (btn) openAddOwnerModal(Number(btn.dataset.parcel));
+  });
+
   await loadData();
 </script>
+
+<!-- מודל הוספת בעלים חדש לחלקה -->
+<div class="modal-overlay" id="add-owner-modal">
+  <div class="modal">
+    <h2>➕ הוספת בעלים לחלקה</h2>
+    <div class="modal-subtitle" id="add-owner-subtitle">גוש 3852 · חלקה —</div>
+
+    <div class="modal-status" id="add-owner-status"></div>
+
+    <div class="modal-field">
+      <label for="new-owner-name">שם מלא *</label>
+      <input type="text" id="new-owner-name" placeholder="לדוגמה: ישראל ישראלי" required>
+    </div>
+
+    <div class="modal-field">
+      <label for="new-owner-id">ת.ז. (לא חובה)</label>
+      <input type="text" id="new-owner-id" placeholder="9 ספרות" maxlength="9">
+      <div class="hint">אם יש ת"ז, היא תאפשר להצליב אוטומטית עם רישום עתידי במערכת</div>
+    </div>
+
+    <div class="modal-field">
+      <label for="new-owner-area">שטח בחלקה (מ"ר) *</label>
+      <input type="number" id="new-owner-area" placeholder="לדוגמה: 600" min="1" required>
+    </div>
+
+    <div class="modal-field">
+      <label for="new-owner-signed">סטטוס חתימה *</label>
+      <select id="new-owner-signed">
+        <option value="true">✅ חתום על הסכם ניהול מקורי</option>
+        <option value="false" selected>➕ הצטרף חדש (לא חתם מקורית)</option>
+      </select>
+      <div class="hint">"הצטרף חדש" = בעלים שלא היה ברשימת החתומים המקורית אבל מעוניין להיכנס לשיתוף ולקומבינציה</div>
+    </div>
+
+    <div class="modal-field">
+      <label for="new-owner-action">פעולת הבעלות (לא חובה)</label>
+      <input type="text" id="new-owner-action" placeholder="לדוגמה: ירושה / מכר / צוואה">
+    </div>
+
+    <div class="modal-field">
+      <label for="new-owner-note">הערה (לא חובה)</label>
+      <input type="text" id="new-owner-note" placeholder="מידע נוסף...">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" id="add-owner-cancel">ביטול</button>
+      <button class="btn-save" id="add-owner-save">💾 שמור</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
