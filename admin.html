@@ -151,6 +151,80 @@
     font-size: 0.82rem;
     white-space: nowrap;
   }
+  th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+  }
+  th.sortable:hover { color: var(--primary); }
+  th.sortable .sort-arrow {
+    display: inline-block;
+    margin-right: 4px;
+    opacity: 0.4;
+    font-size: 0.9em;
+  }
+  th.sortable.sort-active .sort-arrow { opacity: 1; color: var(--primary); }
+
+  /* תג "חתום על הסכם ניהול" */
+  .match-badge {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+  }
+  .match-badge.no-match {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fcd34d;
+  }
+
+  /* כרטיסי בחירות במודל */
+  .selection-card {
+    background: linear-gradient(135deg, #1a3a5c 0%, #2c5f94 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 10px;
+  }
+  .selection-card .sel-title {
+    font-size: 0.82rem;
+    opacity: 0.85;
+    margin-bottom: 6px;
+  }
+  .selection-card .sel-value {
+    font-size: 1.3rem;
+    font-weight: 800;
+  }
+  .selection-card .sel-sub {
+    font-size: 0.82rem;
+    opacity: 0.9;
+    margin-top: 4px;
+  }
+
+  /* כפתור ייצוא */
+  .btn-export {
+    background: var(--success);
+    color: white;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: inherit;
+  }
+  .btn-export:hover { background: #1f5c30; }
+
+  /* סטטיסטיקה — גווני שלב */
+  .stat-card.info { border-right-color: #0891b2; }
+  .stat-card.info .value { color: #0891b2; }
+  .stat-card.gold { border-right-color: var(--accent); }
+  .stat-card.gold .value { color: var(--accent); }
   td {
     padding: 12px 14px;
     border-bottom: 1px solid var(--border);
@@ -327,10 +401,22 @@
       <div class="label">בחירות שמורות</div>
       <div class="value" id="stat-selections">-</div>
     </div>
+    <div class="stat-card info">
+      <div class="label">סה"כ מ"ר חקלאי בבחירות</div>
+      <div class="value" id="stat-total-area">-</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="label">סה"כ שווי בחירות (ברוטו)</div>
+      <div class="value" id="stat-total-value" style="font-size:1.3rem;">-</div>
+    </div>
+    <div class="stat-card approved">
+      <div class="label">תואמים לרשימת החתומים</div>
+      <div class="value" id="stat-matched">-</div>
+    </div>
   </div>
 
   <div class="filters-bar">
-    <input type="text" id="search-input" placeholder="🔍 חיפוש לפי שם, אימייל או ת.ז...">
+    <input type="text" id="search-input" placeholder="🔍 חיפוש לפי שם, אימייל, ת.ז., גוש או חלקה...">
     <select id="status-filter">
       <option value="">כל הסטטוסים</option>
       <option value="pending">ממתינים לאישור</option>
@@ -342,21 +428,27 @@
       <option value="user">משתמש</option>
       <option value="admin">אדמין</option>
     </select>
+    <select id="match-filter">
+      <option value="">כולם (הצלבה)</option>
+      <option value="matched">רק תואמים לרשימת החתומים</option>
+      <option value="unmatched">רק לא תואמים</option>
+    </select>
     <button id="refresh-btn" class="btn-sm btn-view">🔄 רענן</button>
+    <button id="export-btn" class="btn-export">📥 ייצוא לאקסל (CSV)</button>
   </div>
 
   <div class="table-wrap">
     <table id="users-table">
       <thead>
         <tr>
-          <th>שם מלא</th>
-          <th>אימייל</th>
+          <th class="sortable" data-sort="full_name">שם מלא <span class="sort-arrow">↕</span></th>
+          <th class="sortable" data-sort="email">אימייל <span class="sort-arrow">↕</span></th>
           <th>טלפון</th>
-          <th>ת.ז.</th>
+          <th class="sortable" data-sort="id_number">ת.ז. <span class="sort-arrow">↕</span></th>
           <th>חלקה</th>
-          <th>סטטוס</th>
-          <th>תפקיד</th>
-          <th>הרשמה</th>
+          <th class="sortable" data-sort="approval_status">סטטוס <span class="sort-arrow">↕</span></th>
+          <th class="sortable" data-sort="role">תפקיד <span class="sort-arrow">↕</span></th>
+          <th class="sortable" data-sort="created_at">הרשמה <span class="sort-arrow">↕</span></th>
           <th>פעולות</th>
         </tr>
       </thead>
@@ -388,16 +480,28 @@
 
   let allUsers = [];
   let allParcels = {};
+  let allSelections = {};  // user_id → selection (הנוכחית בלבד)
+  let signedIds = new Set(); // ת"ז של בעלים חתומים על הסכם ניהול
+  let sortColumn = 'created_at';
+  let sortDirection = 'desc';
+
+  // פורמט מטבע
+  const fmtNIS = n => n == null ? '-' : '₪' + Math.round(n).toLocaleString('he-IL');
+  const fmtSqm = n => n == null ? '-' : Math.round(n).toLocaleString('he-IL') + ' מ"ר';
+
+  // ניקוי ת"ז להצלבה (הסרת אפסים מובילים + רווחים)
+  const normalizeId = s => s ? String(s).trim().replace(/^0+/, '') : '';
 
   async function loadData() {
     const tbody = document.getElementById('users-tbody');
     tbody.innerHTML = `<tr class="loading-row"><td colspan="9"><div class="spinner"></div></td></tr>`;
 
-    // טעינה במקביל
-    const [usersRes, parcelsRes, selectionsRes] = await Promise.all([
+    // טעינה במקביל — גם signed_owners וגם selections
+    const [usersRes, parcelsRes, selectionsRes, signedRes] = await Promise.all([
       supabase.from('profiles').select('*').order('created_at', { ascending: false }),
       supabase.from('user_parcels').select('*'),
-      supabase.from('selections').select('id', { count: 'exact', head: true }),
+      supabase.from('selections').select('*').eq('is_current', true),
+      supabase.from('signed_owners').select('id_number').eq('is_active', true),
     ]);
 
     if (usersRes.error) {
@@ -414,16 +518,49 @@
       allParcels[p.user_id].push(p);
     });
 
-    updateStats(selectionsRes.count || 0);
+    // בחירות נוכחיות לפי user_id
+    allSelections = {};
+    (selectionsRes.data || []).forEach(s => { allSelections[s.user_id] = s; });
+
+    // רשימת ת"ז חתומים (עם נירמול)
+    signedIds = new Set((signedRes.data || []).map(r => normalizeId(r.id_number)).filter(Boolean));
+
+    updateStats();
     renderTable();
   }
 
-  function updateStats(selectionsCount) {
+  // בדיקה אם ת"ז של משתמש קיים ברשימת החתומים
+  function isMatchedSigner(user) {
+    return user.id_number && signedIds.has(normalizeId(user.id_number));
+  }
+
+  function updateStats() {
     document.getElementById('stat-total').textContent = allUsers.length;
     document.getElementById('stat-pending').textContent = allUsers.filter(u => u.approval_status === 'pending').length;
     document.getElementById('stat-approved').textContent = allUsers.filter(u => u.approval_status === 'approved').length;
     document.getElementById('stat-rejected').textContent = allUsers.filter(u => u.approval_status === 'rejected').length;
-    document.getElementById('stat-selections').textContent = selectionsCount;
+
+    const selections = Object.values(allSelections);
+    document.getElementById('stat-selections').textContent = selections.length;
+
+    // סה"כ שטח חקלאי (מ-user_parcels של משתמשים עם בחירה)
+    const totalArea = selections.reduce((sum, s) => {
+      const notes = typeof s.notes === 'string' ? safeParse(s.notes) : s.notes;
+      return sum + (notes?.input_area || 0);
+    }, 0);
+    document.getElementById('stat-total-area').textContent = totalArea > 0 ? fmtSqm(totalArea) : '-';
+
+    // סה"כ שווי בחירות
+    const totalValue = selections.reduce((sum, s) => sum + (+s.combination_gross_value || 0), 0);
+    document.getElementById('stat-total-value').textContent = totalValue > 0 ? fmtNIS(totalValue) : '-';
+
+    // הצלבה — כמה משתמשים תואמים לרשימת החתומים
+    const matched = allUsers.filter(isMatchedSigner).length;
+    document.getElementById('stat-matched').textContent = `${matched} / ${allUsers.length}`;
+  }
+
+  function safeParse(s) {
+    try { return JSON.parse(s); } catch { return {}; }
   }
 
   function renderTable() {
@@ -431,17 +568,42 @@
     const search = document.getElementById('search-input').value.trim().toLowerCase();
     const status = document.getElementById('status-filter').value;
     const role = document.getElementById('role-filter').value;
+    const matchFilter = document.getElementById('match-filter').value;
 
     let filtered = allUsers;
     if (search) {
-      filtered = filtered.filter(u =>
-        (u.full_name || '').toLowerCase().includes(search) ||
-        (u.email || '').toLowerCase().includes(search) ||
-        (u.id_number || '').toLowerCase().includes(search)
-      );
+      filtered = filtered.filter(u => {
+        const basic = (u.full_name || '').toLowerCase().includes(search) ||
+                      (u.email || '').toLowerCase().includes(search) ||
+                      (u.id_number || '').toLowerCase().includes(search);
+        if (basic) return true;
+        // גם חיפוש לפי גוש/חלקה
+        const parcels = allParcels[u.id] || [];
+        return parcels.some(p =>
+          String(p.block).includes(search) ||
+          String(p.parcel).includes(search) ||
+          `${p.block}/${p.parcel}`.includes(search)
+        );
+      });
     }
     if (status) filtered = filtered.filter(u => u.approval_status === status);
     if (role) filtered = filtered.filter(u => u.role === role);
+    if (matchFilter === 'matched') filtered = filtered.filter(isMatchedSigner);
+    else if (matchFilter === 'unmatched') filtered = filtered.filter(u => !isMatchedSigner(u));
+
+    // מיון
+    filtered = sortUsers(filtered);
+
+    // עדכון חצי המיון בכותרות
+    document.querySelectorAll('th.sortable').forEach(th => {
+      th.classList.remove('sort-active');
+      const arrow = th.querySelector('.sort-arrow');
+      if (arrow) arrow.textContent = '↕';
+      if (th.dataset.sort === sortColumn) {
+        th.classList.add('sort-active');
+        if (arrow) arrow.textContent = sortDirection === 'asc' ? '↑' : '↓';
+      }
+    });
 
     if (filtered.length === 0) {
       tbody.innerHTML = `<tr><td colspan="9" class="empty-state">אין משתמשים להצגה</td></tr>`;
@@ -458,9 +620,18 @@
         ? new Date(u.created_at).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
         : '-';
 
+      // תג הצלבה: אם ת"ז קיים ברשימת החתומים
+      const matched = isMatchedSigner(u);
+      const matchBadge = matched
+        ? '<span class="match-badge" title="ת"ז תואם לרשימת הבעלים החתומים">✓ חתום</span>'
+        : (u.id_number ? '<span class="match-badge no-match" title="ת"ז לא נמצא ברשימת החתומים">⚠ לא ברשימה</span>' : '');
+
+      // סמל אם למשתמש יש בחירה שמורה
+      const hasSelection = allSelections[u.id] ? '💾 ' : '';
+
       return `
         <tr>
-          <td><strong>${u.full_name || '-'}</strong></td>
+          <td><strong>${hasSelection}${u.full_name || '-'}</strong>${matchBadge}</td>
           <td style="direction:ltr;text-align:right;font-size:0.85rem;">${u.email || '-'}</td>
           <td style="direction:ltr;text-align:right;">${u.phone || '-'}</td>
           <td>${u.id_number || '-'}</td>
@@ -577,6 +748,45 @@
     const createdDate = user.created_at ? new Date(user.created_at).toLocaleString('he-IL') : '-';
     const approvedDate = user.approved_at ? new Date(user.approved_at).toLocaleString('he-IL') : '-';
 
+    // הצלבה — ת"ז ברשימת החתומים?
+    const matched = isMatchedSigner(user);
+    const matchRow = user.id_number
+      ? `<div class="modal-row"><span class="label">מופיע ברשימת החתומים?</span><span class="value">${matched ? '<span class="match-badge">✓ כן — ת"ז תואם</span>' : '<span class="match-badge no-match">⚠ לא נמצא</span>'}</span></div>`
+      : '';
+
+    // בחירה שמורה
+    const sel = allSelections[user.id];
+    let selectionHtml = '<div style="color:#9ca3af;padding:8px 0;">אין בחירה שמורה</div>';
+    if (sel) {
+      const selNotes = typeof sel.notes === 'string' ? safeParse(sel.notes) : (sel.notes || {});
+      const lots = Array.isArray(sel.selected_lots) ? sel.selected_lots : [];
+      const lotsListHtml = lots.map(l =>
+        `<div style="padding:4px 0;font-size:0.87rem;">🗺️ מגרש <strong>${l.lot_id}</strong> — ${Math.round(l.allocated_area || 0).toLocaleString('he-IL')} מ"ר (${((l.share_percent || 0) * 100).toFixed(1)}% מהמגרש)</div>`
+      ).join('');
+
+      selectionHtml = `
+        <div style="background:#f9fafb;padding:12px 14px;border-radius:8px;margin-bottom:10px;font-size:0.87rem;">
+          <strong>📋 נתוני קלט:</strong><br>
+          גוש ${selNotes.input_block || '-'} / חלקה ${selNotes.input_parcel || '-'} / שטח ${selNotes.input_area ? selNotes.input_area.toLocaleString('he-IL') + ' מ"ר' : '-'}
+          ${selNotes.signed_with_mor ? ' · חתום על הסכם ניהול' : ''}
+        </div>
+        <div style="margin-bottom:10px;">${lotsListHtml || '<em>אין מגרשים נבחרים</em>'}</div>
+        <div class="selection-card">
+          <div class="sel-title">סה"כ יחידות מבוקשות</div>
+          <div class="sel-value">${(+sel.total_units_equivalent || 0).toFixed(1)} יח"ק</div>
+          <div class="sel-sub">מתוכן: ${(+sel.combination_apartments || 0).toFixed(1)} דירות נטו בקומבינציה (~40%)</div>
+        </div>
+        <div class="selection-card" style="background:linear-gradient(135deg,#2d7a3e 0%,#4ca860 100%);">
+          <div class="sel-title">שווי דירות לבעל הקרקע (ברוטו)</div>
+          <div class="sel-value">${fmtNIS(sel.combination_gross_value)}</div>
+          <div class="sel-sub">שווי המגרש לפי שמאי: ${fmtNIS(sel.total_lot_value)}</div>
+        </div>
+        <div style="font-size:0.78rem;color:#6b7280;margin-top:8px;">
+          נשמר: ${sel.updated_at ? new Date(sel.updated_at).toLocaleString('he-IL') : '-'}
+        </div>
+      `;
+    }
+
     document.getElementById('user-modal-content').innerHTML = `
       <h2>👤 ${user.full_name}</h2>
 
@@ -584,6 +794,7 @@
       <div class="modal-row"><span class="label">אימייל:</span><span class="value" style="direction:ltr;">${user.email || '-'}</span></div>
       <div class="modal-row"><span class="label">טלפון:</span><span class="value" style="direction:ltr;">${user.phone || '-'}</span></div>
       <div class="modal-row"><span class="label">ת.ז.:</span><span class="value">${user.id_number || '-'}</span></div>
+      ${matchRow}
 
       <div class="modal-section-title">סטטוס</div>
       <div class="modal-row"><span class="label">סטטוס אישור:</span><span class="value"><span class="status-badge status-${user.approval_status}">${statusLabel(user.approval_status)}</span></span></div>
@@ -593,6 +804,9 @@
 
       <div class="modal-section-title">חלקות בבעלות</div>
       ${parcelsHtml}
+
+      <div class="modal-section-title">בחירה שמורה בסימולטור</div>
+      ${selectionHtml}
 
       ${user.tabu_file_url ? `
         <div class="modal-section-title">נסח טאבו</div>
@@ -658,11 +872,117 @@
     if (e.target.id === 'user-modal') closeModal();
   });
 
+  // מיון משתמשים לפי עמודה ו-direction
+  function sortUsers(users) {
+    const col = sortColumn;
+    const dir = sortDirection === 'asc' ? 1 : -1;
+    return [...users].sort((a, b) => {
+      let va = a[col], vb = b[col];
+      if (col === 'created_at') {
+        va = new Date(va || 0).getTime();
+        vb = new Date(vb || 0).getTime();
+        return (va - vb) * dir;
+      }
+      va = (va == null ? '' : String(va)).toLowerCase();
+      vb = (vb == null ? '' : String(vb)).toLowerCase();
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+  }
+
+  // ייצוא CSV — שומר את כל העמודות של המשתמשים המסוננים הנוכחיים
+  function exportToCsv() {
+    const search = document.getElementById('search-input').value.trim().toLowerCase();
+    const status = document.getElementById('status-filter').value;
+    const role = document.getElementById('role-filter').value;
+    const matchFilter = document.getElementById('match-filter').value;
+
+    let filtered = allUsers;
+    if (search) {
+      filtered = filtered.filter(u => {
+        const basic = (u.full_name || '').toLowerCase().includes(search) ||
+                      (u.email || '').toLowerCase().includes(search) ||
+                      (u.id_number || '').toLowerCase().includes(search);
+        if (basic) return true;
+        const parcels = allParcels[u.id] || [];
+        return parcels.some(p =>
+          String(p.block).includes(search) || String(p.parcel).includes(search) || `${p.block}/${p.parcel}`.includes(search)
+        );
+      });
+    }
+    if (status) filtered = filtered.filter(u => u.approval_status === status);
+    if (role) filtered = filtered.filter(u => u.role === role);
+    if (matchFilter === 'matched') filtered = filtered.filter(isMatchedSigner);
+    else if (matchFilter === 'unmatched') filtered = filtered.filter(u => !isMatchedSigner(u));
+    filtered = sortUsers(filtered);
+
+    const headers = ['שם מלא','אימייל','טלפון','ת.ז.','גוש','חלקה','שטח (מ"ר)','סטטוס','תפקיד','ברשימת חתומים','תאריך הרשמה','יחידות בבחירה','דירות נטו','שווי ברוטו'];
+    const rows = filtered.map(u => {
+      const parcels = allParcels[u.id] || [];
+      const p = parcels[0] || {};
+      const sel = allSelections[u.id];
+      return [
+        u.full_name || '',
+        u.email || '',
+        u.phone || '',
+        u.id_number || '',
+        p.block || '',
+        p.parcel || '',
+        p.area_owned || '',
+        statusLabel(u.approval_status),
+        u.role === 'admin' ? 'אדמין' : 'משתמש',
+        isMatchedSigner(u) ? 'כן' : 'לא',
+        u.created_at ? new Date(u.created_at).toLocaleDateString('he-IL') : '',
+        sel ? (+sel.total_units_equivalent || 0).toFixed(2) : '',
+        sel ? (+sel.combination_apartments || 0).toFixed(2) : '',
+        sel ? Math.round(+sel.combination_gross_value || 0) : '',
+      ];
+    });
+
+    // בניית CSV עם BOM לתמיכה בעברית באקסל
+    const csv = '\uFEFF' + [headers, ...rows].map(row =>
+      row.map(cell => {
+        const s = String(cell);
+        // ציטוט אם יש פסיק / ציטוטים / שורה חדשה
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(',')
+    ).join('\n');
+
+    // הורדה
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const date = new Date().toISOString().slice(0, 10);
+    link.download = `hameyasdim-users-${date}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  // מאזיני מיון לכותרות
+  document.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (sortColumn === col) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = col;
+        sortDirection = 'asc';
+      }
+      renderTable();
+    });
+  });
+
   // אירועי מסננים
   document.getElementById('search-input').addEventListener('input', renderTable);
   document.getElementById('status-filter').addEventListener('change', renderTable);
   document.getElementById('role-filter').addEventListener('change', renderTable);
+  document.getElementById('match-filter').addEventListener('change', renderTable);
   document.getElementById('refresh-btn').addEventListener('click', loadData);
+  document.getElementById('export-btn').addEventListener('click', exportToCsv);
 
   // טעינה ראשונית
   await loadData();
