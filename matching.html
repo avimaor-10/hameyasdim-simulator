@@ -733,13 +733,24 @@
                 else if (x.isRegistered) { icon = '📝'; color = '#92400e'; }
                 else { icon = '⏸️'; color = '#6b7280'; }
                 const statusText = x.hasSelected ? 'בחר' : (x.isRegistered ? 'נרשם — עדיין לא בחר' : 'עדיין לא נרשם');
+
+                // אם המשתמש שנרשם עם הת"ז הזו הוא בשם שונה מהחתום — להציג אזהרה
+                const profileName = x.profile ? x.profile.full_name : null;
+                const nameMismatch = profileName && profileName.trim() !== s.owner_name.trim();
+                const subInfo = x.isRegistered
+                  ? (nameMismatch
+                      ? `<div style="font-size:0.72rem;color:#dc2626;margin-right:22px;margin-top:2px;">⚠️ נרשם בשם שונה: <strong>${profileName}</strong></div>`
+                      : `<div style="font-size:0.72rem;color:#6b7280;margin-right:22px;margin-top:2px;">${x.profile.email || ''}</div>`)
+                  : '';
+
                 return `
-                  <div class="owner-row" style="border-bottom:1px dashed #e5e7eb;padding:6px 0;font-size:0.88rem;">
-                    <span class="name" style="display:inline-flex;align-items:center;gap:6px;">
+                  <div class="owner-row" style="border-bottom:1px dashed #e5e7eb;padding:6px 0;font-size:0.88rem;flex-wrap:wrap;">
+                    <span class="name" style="display:inline-flex;align-items:center;gap:6px;flex:1;min-width:180px;">
                       <span>${icon}</span>
                       <span>${s.owner_name}</span>
                     </span>
                     <span style="color:${color};font-size:0.78rem;font-weight:600;">${statusText}</span>
+                    ${subInfo ? `<div style="flex-basis:100%;">${subInfo}</div>` : ''}
                   </div>`;
               }).join('')
             : '<div class="no-owners" style="color:#9ca3af;text-align:center;padding:10px 0;">אין בעלים חתומים ברשימה שלנו בחלקה זו</div>';
