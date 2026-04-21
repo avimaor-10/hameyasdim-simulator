@@ -912,11 +912,14 @@
               }).join('')
             : '<div class="no-owners" style="color:#9ca3af;text-align:center;padding:10px 0;">אין בעלים ברשימה שלנו בחלקה זו</div>';
 
-          // סיכום שטחים
-          const totalOwnerArea = ps.signersStatus.reduce((sum, x) => sum + Number(x.signer.agreement_area || x.signer.plan_area || 0), 0);
-          const areaGap = ps.parcel.includedArea - totalOwnerArea;
-          const signedCount = ps.signersStatus.filter(x => x.signer.is_signed !== false).length;
-          const joinedCount = ps.signersStatus.filter(x => x.signer.is_signed === false).length;
+          // סיכום שטחים — רק של חתומים (לא כולל "הצטרפו חדש")
+          const signedSigners = ps.signersStatus.filter(x => x.signer.is_signed !== false);
+          const joinedSigners = ps.signersStatus.filter(x => x.signer.is_signed === false);
+          const totalSignedArea = signedSigners.reduce((sum, x) => sum + Number(x.signer.agreement_area || x.signer.plan_area || 0), 0);
+          const totalJoinedArea = joinedSigners.reduce((sum, x) => sum + Number(x.signer.agreement_area || x.signer.plan_area || 0), 0);
+          const areaGap = ps.parcel.includedArea - totalSignedArea;
+          const signedCount = signedSigners.length;
+          const joinedCount = joinedSigners.length;
 
           return `
             <div class="parcel-card ${ps.statusClass}">
@@ -933,12 +936,12 @@
                   <div class="value" style="font-size:0.95rem;">${ps.parcel.totalArea.toLocaleString('he-IL')}${ps.parcel.totalArea !== ps.parcel.includedArea ? ` / <span style="color:var(--warning);">${ps.parcel.includedArea.toLocaleString('he-IL')}</span>` : ''} מ"ר</div>
                 </div>
                 <div class="parcel-stat">
-                  <div class="label">בעלים ברשימה שלנו</div>
-                  <div class="value" style="font-size:0.95rem;">${ps.totalSigners}${joinedCount > 0 ? ` <span style="color:var(--warning);font-size:0.78rem;">(${signedCount} חתומים + ${joinedCount} חדשים)</span>` : ''}</div>
+                  <div class="label">בעלים חתומים ברשימה שלנו</div>
+                  <div class="value" style="font-size:0.95rem;">${signedCount}${joinedCount > 0 ? ` <span style="color:var(--warning);font-size:0.78rem;">(+ ${joinedCount} הצטרפו חדש)</span>` : ''}</div>
                 </div>
                 <div class="parcel-stat">
-                  <div class="label">סה"כ שטח בעלים ברשימה</div>
-                  <div class="value" style="font-size:0.95rem;">${Math.round(totalOwnerArea).toLocaleString('he-IL')} מ"ר${areaGap > 1 ? ` <span style="color:var(--warning);font-size:0.78rem;">(חסר ${Math.round(areaGap).toLocaleString('he-IL')})</span>` : areaGap < -1 ? ` <span style="color:#9ca3af;font-size:0.78rem;">(עודף ${Math.round(-areaGap).toLocaleString('he-IL')})</span>` : ''}</div>
+                  <div class="label">סה"כ שטח בעלים חתומים ברשימה</div>
+                  <div class="value" style="font-size:0.95rem;">${Math.round(totalSignedArea).toLocaleString('he-IL')} מ"ר${areaGap > 1 ? ` <span style="color:var(--warning);font-size:0.78rem;">(חסר ${Math.round(areaGap).toLocaleString('he-IL')})</span>` : areaGap < -1 ? ` <span style="color:#9ca3af;font-size:0.78rem;">(עודף ${Math.round(-areaGap).toLocaleString('he-IL')})</span>` : ''}${joinedCount > 0 ? `<br><span style="font-size:0.75rem;color:var(--text-muted);">+ ${Math.round(totalJoinedArea).toLocaleString('he-IL')} מ"ר מהצטרפו חדש</span>` : ''}</div>
                 </div>
                 <div class="parcel-stat">
                   <div class="label">מהם עשו בחירה</div>
@@ -946,7 +949,7 @@
                 </div>
               </div>
               <div class="owners-list">
-                <div class="owners-title">בעלים ברשימה (${ps.totalSigners})</div>
+                <div class="owners-title">בעלים חתומים ברשימה (${ps.totalSigners})</div>
                 ${signersHtml}
               </div>
               <button class="add-owner-btn" data-parcel="${ps.parcel.parcel}">➕ הוסף בעלים לחלקה</button>
