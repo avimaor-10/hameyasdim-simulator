@@ -1267,6 +1267,8 @@
   // מצב טאב המגרשים
   let allDeals = [];           // כל העסקאות מ-partnership_deals
   let allDealAllocations = []; // כל ההקצאות מ-deal_lot_allocations
+  let allSignedOwners = [];    // כל הבעלים החתומים מ-signed_owners
+  let allSignedAllocations = []; // הקצאות אדמין מ-signed_owner_lot_allocations
   // allocationsByLot: lot_id -> [{source, owner_name, area, ...}]
   let allocationsByLot = {};
 
@@ -1289,10 +1291,12 @@
     const grid = document.getElementById('lots-grid');
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;"><div class="spinner"></div><div style="margin-top:8px;">טוען...</div></div>`;
 
-    const [dealsRes, dealAllocRes, selsRes] = await Promise.all([
+    const [dealsRes, dealAllocRes, selsRes, signedRes, signedAllocRes] = await Promise.all([
       supabase.from('partnership_deals').select('*').eq('is_active', true).order('deal_number'),
       supabase.from('deal_lot_allocations').select('*'),
       supabase.from('selections').select('*').eq('is_current', true),
+      supabase.from('signed_owners').select('*').eq('is_active', true).order('owner_name'),
+      supabase.from('signed_owner_lot_allocations').select('*'),
     ]);
 
     if (dealsRes.error) {
@@ -1302,11 +1306,13 @@
 
     allDeals = dealsRes.data || [];
     allDealAllocations = dealAllocRes.data || [];
+    allSignedOwners = signedRes.data || [];
+    allSignedAllocations = signedAllocRes.data || [];
 
     // אגרגציה לפי lot_id
     allocationsByLot = {};
 
-    // 1) הקצאות מ-selections (חתומים מקור — בחירה עצמית)
+    // 1) הקצאות מ-selections (חתומים מקור — בחירה עצמית של הלקוח דרך הסימולטור)
     (selsRes.data || []).forEach(sel => {
       const lots = Array.isArray(sel.selected_lots) ? sel.selected_lots : [];
       const userInfo = allUsers.find(u => u.id === sel.user_id);
@@ -1316,18 +1322,36 @@
         const lotId = +l.lot_id;
         if (!allocationsByLot[lotId]) allocationsByLot[lotId] = [];
         allocationsByLot[lotId].push({
-          source: 'signed',
-          source_label: 'חתום מקור',
+          source: 'signed-self',
+          source_label: 'חתום מקור (בחירה עצמית)',
           owner_name: ownerName,
           owner_id: ownerId,
           area: +l.allocated_area || 0,
-          allocation_id: null,  // לא ניתן למחוק מטאב זה
+          allocation_id: null,  // לא ניתן למחוק מטאב זה (זו בחירת הלקוח)
           deal_id: null,
         });
       });
     });
 
-    // 2) הקצאות מ-deal_lot_allocations (נדלן נדלן / דודי יצחקי)
+    // 2) הקצאות מ-signed_owner_lot_allocations (חתומים מקור — שיבוץ ידני של אדמין)
+    allSignedAllocations.forEach(a => {
+      const owner = allSignedOwners.find(o => o.id === a.signed_owner_id);
+      if (!owner) return;
+      if (!allocationsByLot[a.lot_id]) allocationsByLot[a.lot_id] = [];
+      allocationsByLot[a.lot_id].push({
+        source: 'signed-admin',
+        source_label: 'חתום מקור (שיבוץ אדמין)',
+        owner_name: owner.owner_name,
+        owner_id: owner.id_number || '',
+        owner_parcel: owner.parcel,
+        area: +a.allocated_area || 0,
+        allocation_id: a.id,
+        signed_owner_id: owner.id,
+        allocation_type: a.allocation_type,
+      });
+    });
+
+    // 3) הקצאות מ-deal_lot_allocations (נדלן נדלן / דודי יצחקי)
     allDealAllocations.forEach(a => {
       const deal = allDeals.find(d => d.id === a.deal_id);
       if (!deal) return;
@@ -1410,11 +1434,15 @@
       const allocsHtml = l.allocs.length === 0
         ? `<div class="alloc-empty">אין הקצאות עדיין</div>`
         : l.allocs.map(a => {
-            const badge = a.source === 'signed'   ? `<span class="alloc-source-badge alloc-source-signed">🔵 חתום מקור</span>`
-                       :  a.source === 'nadlan'   ? `<span class="alloc-source-badge alloc-source-nadlan">🏢 נדלן נדלן</span>`
-                       :                            `<span class="alloc-source-badge alloc-source-yitzhaki">👤 דודי יצחקי</span>`;
-            const delBtn = a.allocation_id ? `<button class="btn-sm btn-reject" data-action="del-alloc" data-id="${a.allocation_id}" style="padding:1px 6px;font-size:0.7rem;margin-right:4px;">✗</button>` : '';
-            return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${delBtn}</span><span>${fmtSqm(a.area)}</span></div>`;
+            const badge = a.source === 'signed-self'  ? `<span class="alloc-source-badge alloc-source-signed">🔵 חתום (לקוח)</span>`
+                       :  a.source === 'signed-admin' ? `<span class="alloc-source-badge alloc-source-signed">🔵 חתום (אדמין)</span>`
+                       :  a.source === 'nadlan'       ? `<span class="alloc-source-badge alloc-source-nadlan">🏢 נדלן נדלן</span>`
+                       :                                 `<span class="alloc-source-badge alloc-source-yitzhaki">👤 דודי יצחקי</span>`;
+            // מחיקה אפשרית רק להקצאות שאדמין יצר (deal או signed-admin)
+            const delType = a.source === 'signed-admin' ? 'del-signed' : 'del-deal';
+            const delBtn = a.allocation_id ? `<button class="btn-sm btn-reject" data-action="${delType}" data-id="${a.allocation_id}" style="padding:1px 6px;font-size:0.7rem;margin-right:4px;">✗</button>` : '';
+            const parcelHint = a.owner_parcel ? ` <span style="color:var(--text-muted);font-size:0.75rem;">(חלקה ${a.owner_parcel})</span>` : '';
+            return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${parcelHint}${delBtn}</span><span>${fmtSqm(a.area)}</span></div>`;
           }).join('');
 
       const unitsLabel = l.units > 0 ? `${l.units} דירות` : `${l.rentalUnits} השכרה`;
@@ -1444,8 +1472,11 @@
     document.querySelectorAll('[data-action="add-alloc"]').forEach(btn => {
       btn.addEventListener('click', () => openAllocModal(+btn.dataset.lot));
     });
-    document.querySelectorAll('[data-action="del-alloc"]').forEach(btn => {
-      btn.addEventListener('click', () => deleteAllocation(btn.dataset.id));
+    document.querySelectorAll('[data-action="del-deal"]').forEach(btn => {
+      btn.addEventListener('click', () => deleteDealAllocation(btn.dataset.id));
+    });
+    document.querySelectorAll('[data-action="del-signed"]').forEach(btn => {
+      btn.addEventListener('click', () => deleteSignedAllocation(btn.dataset.id));
     });
   }
 
@@ -1470,6 +1501,7 @@
       <div class="modal-section-title">מקור ההקצאה</div>
       <select id="alloc-source" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
         <option value="">בחר מקור...</option>
+        <option value="signed">🔵 חתום הסכם מקור</option>
         <option value="nadlan">🏢 נדלן נדלן</option>
         <option value="yitzhaki">👤 דודי יצחקי</option>
       </select>
@@ -1480,6 +1512,14 @@
           <option value="">בחר עסקה...</option>
         </select>
         <div id="alloc-deal-info" style="font-size:0.83rem;color:var(--text-muted);margin-top:6px;"></div>
+      </div>
+
+      <div id="alloc-signed-section" style="display:none;margin-top:10px;">
+        <div class="modal-section-title">בחר בעלים חתום (חיפוש לפי שם / ת.ז. / חלקה)</div>
+        <input type="text" id="alloc-signed-search" placeholder="התחל להקליד..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+        <div id="alloc-signed-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:6px;display:none;"></div>
+        <div id="alloc-signed-info" style="font-size:0.83rem;color:var(--text-muted);margin-top:6px;"></div>
+        <input type="hidden" id="alloc-signed-id">
       </div>
 
       <div class="modal-section-title">סוג הקצאה</div>
@@ -1507,22 +1547,82 @@
     const dealSection = document.getElementById('alloc-deal-section');
     const dealSel = document.getElementById('alloc-deal');
     const dealInfo = document.getElementById('alloc-deal-info');
+    const signedSection = document.getElementById('alloc-signed-section');
+    const signedSearch = document.getElementById('alloc-signed-search');
+    const signedList = document.getElementById('alloc-signed-list');
+    const signedInfo = document.getElementById('alloc-signed-info');
+    const signedIdHidden = document.getElementById('alloc-signed-id');
 
     sourceSel.addEventListener('change', () => {
-      const cat = sourceSel.value === 'nadlan' ? 'נדלן נדלן' : sourceSel.value === 'yitzhaki' ? 'דודי יצחקי' : null;
-      if (!cat) { dealSection.style.display = 'none'; return; }
-      const deals = availableDeals.filter(d => d.category === cat);
-      dealSel.innerHTML = '<option value="">בחר עסקה...</option>' + deals.map(d =>
-        `<option value="${d.id}">#${d.deal_number} ${d.deal_name} · חלקה ${d.parcel} · נותר ${d.remaining_area.toFixed(0)} מ"ר</option>`
-      ).join('');
-      dealSection.style.display = 'block';
-      dealInfo.textContent = '';
+      const v = sourceSel.value;
+      dealSection.style.display = 'none';
+      signedSection.style.display = 'none';
+      if (v === 'nadlan' || v === 'yitzhaki') {
+        const cat = v === 'nadlan' ? 'נדלן נדלן' : 'דודי יצחקי';
+        const deals = availableDeals.filter(d => d.category === cat);
+        dealSel.innerHTML = '<option value="">בחר עסקה...</option>' + deals.map(d =>
+          `<option value="${d.id}">#${d.deal_number} ${d.deal_name} · חלקה ${d.parcel} · נותר ${d.remaining_area.toFixed(0)} מ"ר</option>`
+        ).join('');
+        dealSection.style.display = 'block';
+        dealInfo.textContent = '';
+      } else if (v === 'signed') {
+        signedSection.style.display = 'block';
+        signedSearch.value = '';
+        signedList.style.display = 'none';
+        signedInfo.textContent = '';
+        signedIdHidden.value = '';
+      }
     });
 
     dealSel.addEventListener('change', () => {
       const deal = availableDeals.find(d => d.id === dealSel.value);
       if (!deal) { dealInfo.textContent = ''; return; }
       dealInfo.textContent = `סטטוס: ${deal.status} · סה"כ עסקה: ${(+deal.area_sqm).toFixed(2)} מ"ר · הוקצה: ${deal.used_area.toFixed(2)} · נותר: ${deal.remaining_area.toFixed(2)}`;
+    });
+
+    // חיפוש בעלים חתום (signed_owners)
+    signedSearch.addEventListener('input', () => {
+      const q = signedSearch.value.trim().toLowerCase();
+      if (q.length < 1) { signedList.style.display = 'none'; return; }
+      const matches = allSignedOwners.filter(o => {
+        const name = (o.owner_name || '').toLowerCase();
+        const id = (o.id_number || '').toLowerCase();
+        const parcel = String(o.parcel || '');
+        return name.includes(q) || id.includes(q) || parcel.includes(q);
+      }).slice(0, 50);
+      if (matches.length === 0) {
+        signedList.innerHTML = `<div style="padding:10px;color:var(--text-muted);">לא נמצאו תוצאות</div>`;
+      } else {
+        signedList.innerHTML = matches.map(o => {
+          // חישוב כמה כבר הוקצה לבעלים זה
+          const usedArea = allSignedAllocations.filter(a => a.signed_owner_id === o.id)
+            .reduce((s, a) => s + (+a.allocated_area || 0), 0);
+          const totalArea = +o.agreement_area || +o.unification_area || 0;
+          const rem = totalArea - usedArea;
+          return `<div class="signed-pick" data-id="${o.id}" style="padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.87rem;">
+            <strong>${o.owner_name}</strong> · ת.ז. ${o.id_number || '-'} · חלקה ${o.parcel}
+            <div style="font-size:0.78rem;color:var(--text-muted);">סה"כ זכאות: ${totalArea.toFixed(0)} מ"ר · הוקצה כבר: ${usedArea.toFixed(0)} · נותר: ${rem.toFixed(0)}</div>
+          </div>`;
+        }).join('');
+      }
+      signedList.style.display = 'block';
+    });
+
+    // לחיצה על בעלים מהרשימה
+    signedList.addEventListener('click', (e) => {
+      const item = e.target.closest('.signed-pick');
+      if (!item) return;
+      const ownerId = item.dataset.id;
+      const owner = allSignedOwners.find(o => o.id === ownerId);
+      if (!owner) return;
+      signedIdHidden.value = ownerId;
+      signedSearch.value = `${owner.owner_name} · ת.ז. ${owner.id_number || '-'} · חלקה ${owner.parcel}`;
+      signedList.style.display = 'none';
+      const usedArea = allSignedAllocations.filter(a => a.signed_owner_id === ownerId)
+        .reduce((s, a) => s + (+a.allocated_area || 0), 0);
+      const totalArea = +owner.agreement_area || +owner.unification_area || 0;
+      const rem = totalArea - usedArea;
+      signedInfo.textContent = `נבחר. סה"כ זכאות: ${totalArea.toFixed(0)} מ"ר · הוקצה כבר: ${usedArea.toFixed(0)} · נותר: ${rem.toFixed(0)}`;
     });
 
     document.getElementById('alloc-close-btn').addEventListener('click', closeAllocModal);
@@ -1538,19 +1638,51 @@
   });
 
   async function saveAllocation(lotId, lotRemaining) {
-    const dealId = document.getElementById('alloc-deal').value;
+    const source = document.getElementById('alloc-source').value;
     const allocType = document.getElementById('alloc-type').value;
     const areaRaw = document.getElementById('alloc-area').value;
     const notes = document.getElementById('alloc-notes').value.trim();
 
-    if (!dealId) { alert('יש לבחור עסקה'); return; }
+    if (!source) { alert('יש לבחור מקור הקצאה'); return; }
+
     const area = parseFloat(areaRaw);
     if (!area || area <= 0) { alert('יש להזין שטח חיובי'); return; }
     if (area > lotRemaining + 0.5) {
       if (!confirm(`השטח שהוזן (${area} מ"ר) גדול מהנותר במגרש (${lotRemaining.toFixed(2)} מ"ר). להמשיך בכל זאת?`)) return;
     }
 
-    // בדיקה שלא חורגים מהשטח הנותר בעסקה
+    // === הקצאה מבעלים חתום מקור (אדמין משבץ) ===
+    if (source === 'signed') {
+      const signedOwnerId = document.getElementById('alloc-signed-id').value;
+      if (!signedOwnerId) { alert('יש לבחור בעלים חתום מהרשימה'); return; }
+
+      // בדיקה שלא חורגים מהזכאות של הבעלים
+      const owner = allSignedOwners.find(o => o.id === signedOwnerId);
+      const usedArea = allSignedAllocations.filter(a => a.signed_owner_id === signedOwnerId)
+        .reduce((s, a) => s + (+a.allocated_area || 0), 0);
+      const totalArea = +owner.agreement_area || +owner.unification_area || 0;
+      const ownerRemaining = totalArea - usedArea;
+      if (totalArea > 0 && area > ownerRemaining + 0.5) {
+        if (!confirm(`השטח חורג מהזכאות הנותרת של הבעלים (${ownerRemaining.toFixed(2)} מ"ר). להמשיך?`)) return;
+      }
+
+      const { error } = await supabase.from('signed_owner_lot_allocations').insert({
+        signed_owner_id: signedOwnerId,
+        lot_id: lotId,
+        allocation_type: allocType,
+        allocated_area: area,
+        notes: notes || null,
+      });
+      if (error) { alert('שגיאה: ' + error.message); return; }
+      closeAllocModal();
+      await loadAllocations();
+      return;
+    }
+
+    // === הקצאה מעסקה (נדלן נדלן / דודי יצחקי) ===
+    const dealId = document.getElementById('alloc-deal').value;
+    if (!dealId) { alert('יש לבחור עסקה'); return; }
+
     const deal = allDeals.find(d => d.id === dealId);
     const usedArea = allDealAllocations.filter(a => a.deal_id === dealId).reduce((s, a) => s + (+a.allocated_area || 0), 0);
     const dealRemaining = (+deal.area_sqm || 0) - usedArea;
@@ -1571,9 +1703,16 @@
     await loadAllocations();
   }
 
-  async function deleteAllocation(allocId) {
-    if (!confirm('למחוק את ההקצאה?')) return;
+  async function deleteDealAllocation(allocId) {
+    if (!confirm('למחוק את הקצאת העסקה?')) return;
     const { error } = await supabase.from('deal_lot_allocations').delete().eq('id', allocId);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    await loadAllocations();
+  }
+
+  async function deleteSignedAllocation(allocId) {
+    if (!confirm('למחוק את שיבוץ הבעלים החתום?')) return;
+    const { error } = await supabase.from('signed_owner_lot_allocations').delete().eq('id', allocId);
     if (error) { alert('שגיאה: ' + error.message); return; }
     await loadAllocations();
   }
