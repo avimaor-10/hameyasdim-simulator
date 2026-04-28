@@ -926,9 +926,40 @@
           const joinedSigners = ps.signersStatus.filter(x => x.signer.is_signed === false);
           const totalSignedArea = signedSigners.reduce((sum, x) => sum + Number(x.signer.agreement_area || x.signer.plan_area || 0), 0);
           const totalJoinedArea = joinedSigners.reduce((sum, x) => sum + Number(x.signer.agreement_area || x.signer.plan_area || 0), 0);
-          const areaGap = ps.parcel.includedArea - totalSignedArea;
           const signedCount = signedSigners.length;
           const joinedCount = joinedSigners.length;
+
+          // עסקאות שותפות בחלקה זו (נדלן נדלן + דודי יצחקי)
+          const parcelDeals = allDeals.filter(d => d.parcel === ps.parcel.parcel);
+          const totalDealsArea = parcelDeals.reduce((sum, d) => sum + Number(d.area_sqm || 0), 0);
+
+          // הפער כעת מחושב מול חתומים + עסקאות
+          const areaGap = ps.parcel.includedArea - totalSignedArea - totalDealsArea;
+
+          // HTML של העסקאות
+          const dealsHtml = parcelDeals.length === 0 ? '' : `
+            <div class="owners-list" style="margin-top:10px;">
+              <div class="owners-title">בעלי זכויות מעסקאות שותפות (${parcelDeals.length})</div>
+              ${parcelDeals.map(d => {
+                const catBadge = d.category === 'נדלן נדלן'
+                  ? '<span style="background:#fed7aa;color:#9a3412;padding:1px 6px;border-radius:8px;font-size:0.7rem;font-weight:600;margin-right:4px;border:1px solid #fdba74;">🏢 נדלן נדלן</span>'
+                  : '<span style="background:#e9d5ff;color:#6b21a8;padding:1px 6px;border-radius:8px;font-size:0.7rem;font-weight:600;margin-right:4px;border:1px solid #d8b4fe;">👤 דודי יצחקי</span>';
+                const statusIcon = d.status === 'הושלמה ונרשמה' ? '✅' : d.status === 'הושלמה ולא נרשמה' ? '📋' : '🔄';
+                const statusColor = d.status === 'הושלמה ונרשמה' ? '#065f46' : d.status === 'הושלמה ולא נרשמה' ? '#92400e' : '#6b21a8';
+                return `
+                  <div class="owner-row" style="border-bottom:1px dashed #e5e7eb;padding:6px 0;font-size:0.88rem;flex-wrap:wrap;">
+                    <span class="name" style="display:inline-flex;align-items:center;gap:6px;flex:1;min-width:180px;">
+                      <span>${statusIcon}</span>
+                      <span>${d.deal_name}</span>
+                      ${catBadge}
+                    </span>
+                    <span style="text-align:left;">
+                      <span style="color:var(--primary);font-weight:600;font-size:0.82rem;">${Math.round(d.area_sqm).toLocaleString('he-IL')} מ"ר</span><br>
+                      <span style="color:${statusColor};font-size:0.72rem;font-weight:600;">${d.status}</span>
+                    </span>
+                  </div>`;
+              }).join('')}
+            </div>`;
 
           return `
             <div class="parcel-card ${ps.statusClass}">
@@ -949,8 +980,13 @@
                   <div class="value" style="font-size:0.95rem;">${signedCount}${joinedCount > 0 ? ` <span style="color:var(--warning);font-size:0.78rem;">(+ ${joinedCount} הצטרפו חדש)</span>` : ''}</div>
                 </div>
                 <div class="parcel-stat">
-                  <div class="label">סה"כ שטח בעלים חתומים ברשימה</div>
-                  <div class="value" style="font-size:0.95rem;">${Math.round(totalSignedArea).toLocaleString('he-IL')} מ"ר${areaGap > 1 ? ` <span style="color:var(--warning);font-size:0.78rem;">(חסר ${Math.round(areaGap).toLocaleString('he-IL')})</span>` : areaGap < -1 ? ` <span style="color:#9ca3af;font-size:0.78rem;">(עודף ${Math.round(-areaGap).toLocaleString('he-IL')})</span>` : ''}${joinedCount > 0 ? `<br><span style="font-size:0.75rem;color:var(--text-muted);">+ ${Math.round(totalJoinedArea).toLocaleString('he-IL')} מ"ר מהצטרפו חדש</span>` : ''}</div>
+                  <div class="label">סה"כ שטח בעלי זכויות (חתומים + עסקאות)</div>
+                  <div class="value" style="font-size:0.95rem;">
+                    ${Math.round(totalSignedArea + totalDealsArea).toLocaleString('he-IL')} מ"ר${areaGap > 1 ? ` <span style="color:var(--warning);font-size:0.78rem;">(חסר ${Math.round(areaGap).toLocaleString('he-IL')})</span>` : areaGap < -1 ? ` <span style="color:#9ca3af;font-size:0.78rem;">(עודף ${Math.round(-areaGap).toLocaleString('he-IL')})</span>` : ''}
+                    <div style="font-size:0.74rem;color:var(--text-muted);margin-top:2px;">
+                      חתומים: ${Math.round(totalSignedArea).toLocaleString('he-IL')}${parcelDeals.length > 0 ? ` · עסקאות: ${Math.round(totalDealsArea).toLocaleString('he-IL')}` : ''}${joinedCount > 0 ? ` · הצטרפו חדש: ${Math.round(totalJoinedArea).toLocaleString('he-IL')}` : ''}
+                    </div>
+                  </div>
                 </div>
                 <div class="parcel-stat">
                   <div class="label">מהם עשו בחירה</div>
@@ -961,6 +997,7 @@
                 <div class="owners-title">בעלים חתומים ברשימה (${ps.totalSigners})</div>
                 ${signersHtml}
               </div>
+              ${dealsHtml}
               ${ps.totalSigners > 0 && ps.selectedCount < ps.totalSigners ? `
                 <div class="gap-note">
                   <strong>🎯 עדיין לא בחרו:</strong> ${ps.gap} בעלים מבין ${ps.totalSigners} בחלקה זו
