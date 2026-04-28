@@ -437,6 +437,23 @@
   .lot-status-locked  { background: var(--success-light); color: #065f46; }
   .lot-status-partial { background: var(--warning-light); color: #92400e; }
   .lot-status-empty   { background: #f3f4f6; color: var(--text-muted); }
+  .lot-rights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 8px 0;
+  }
+  .rights-tag {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .rights-own  { background: #dbeafe; color: #1e40af; }
+  .rights-rent { background: #fef3c7; color: #92400e; }
+  .rights-emp  { background: #dcfce7; color: #166534; }
+  .rights-com  { background: #fce7f3; color: #9f1239; }
   .lot-progress {
     height: 8px;
     background: #f3f4f6;
@@ -1221,47 +1238,47 @@
   // ===== טאב 2: שיבוץ מגרשים סחירים =====
   // ============================================================
 
-  // נתוני 38 המגרשים מהפרויקט (תואם PROJECT.LOTS ב-index.html)
+  // נתוני 39 המגרשים מהפרויקט (תואם PROJECT.LOTS ב-index.html) — עם זכויות בנייה מלאות
   const LOTS = [
-    { id: 1,  use: 'מגורים ותעסוקה', units: 102, rentalUnits: 0,   requiredIncomingArea: 8536  },
-    { id: 2,  use: 'מגורים ותעסוקה', units: 324, rentalUnits: 0,   requiredIncomingArea: 22309 },
-    { id: 3,  use: 'מגורים ותעסוקה', units: 0,   rentalUnits: 264, requiredIncomingArea: 8195  },
-    { id: 4,  use: 'מגורים ותעסוקה', units: 96,  rentalUnits: 0,   requiredIncomingArea: 3962  },
-    { id: 5,  use: 'מגורים ותעסוקה', units: 168, rentalUnits: 0,   requiredIncomingArea: 5856  },
-    { id: 6,  use: 'מגורים ד׳',       units: 0,   rentalUnits: 213, requiredIncomingArea: 1891  },
-    { id: 7,  use: 'מגורים ד׳',       units: 0,   rentalUnits: 234, requiredIncomingArea: 4591  },
-    { id: 8,  use: 'מגורים ד׳',       units: 180, rentalUnits: 0,   requiredIncomingArea: 10722 },
-    { id: 9,  use: 'מגורים ד׳',       units: 330, rentalUnits: 0,   requiredIncomingArea: 20518 },
-    { id: 10, use: 'מגורים ד׳',       units: 222, rentalUnits: 0,   requiredIncomingArea: 14239 },
-    { id: 11, use: 'מגורים ד׳',       units: 230, rentalUnits: 0,   requiredIncomingArea: 14300 },
-    { id: 12, use: 'מגורים ד׳',       units: 211, rentalUnits: 0,   requiredIncomingArea: 12463 },
-    { id: 13, use: 'מגורים ד׳',       units: 163, rentalUnits: 0,   requiredIncomingArea: 10668 },
-    { id: 14, use: 'מגורים ד׳',       units: 81,  rentalUnits: 0,   requiredIncomingArea: 4935  },
-    { id: 15, use: 'מגורים ד׳',       units: 143, rentalUnits: 0,   requiredIncomingArea: 8438  },
-    { id: 16, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 12143 },
-    { id: 17, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 12782 },
-    { id: 18, use: 'מגורים ד׳',       units: 192, rentalUnits: 0,   requiredIncomingArea: 12931 },
-    { id: 19, use: 'מגורים ד׳',       units: 288, rentalUnits: 0,   requiredIncomingArea: 18729 },
-    { id: 20, use: 'מגורים ד׳',       units: 201, rentalUnits: 0,   requiredIncomingArea: 13838 },
-    { id: 21, use: 'מגורים ה׳',       units: 192, rentalUnits: 0,   requiredIncomingArea: 13232 },
-    { id: 22, use: 'מגורים ד׳',       units: 178, rentalUnits: 0,   requiredIncomingArea: 11690 },
-    { id: 23, use: 'מגורים ד׳',       units: 0,   rentalUnits: 188, requiredIncomingArea: 3990  },
-    { id: 24, use: 'מגורים ד׳',       units: 176, rentalUnits: 0,   requiredIncomingArea: 12154 },
-    { id: 25, use: 'מגורים ד׳',       units: 0,   rentalUnits: 267, requiredIncomingArea: 5996  },
-    { id: 26, use: 'מגורים ד׳',       units: 175, rentalUnits: 0,   requiredIncomingArea: 10843 },
-    { id: 27, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 11760 },
-    { id: 28, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 11334 },
-    { id: 29, use: 'מגורים ד׳',       units: 207, rentalUnits: 0,   requiredIncomingArea: 12915 },
-    { id: 30, use: 'מגורים ד׳',       units: 201, rentalUnits: 0,   requiredIncomingArea: 13155 },
-    { id: 31, use: 'מגורים ד׳',       units: 135, rentalUnits: 0,   requiredIncomingArea: 8961  },
-    { id: 32, use: 'מגורים ד׳',       units: 138, rentalUnits: 0,   requiredIncomingArea: 9153  },
-    { id: 33, use: 'מגורים ד׳',       units: 202, rentalUnits: 0,   requiredIncomingArea: 12560 },
-    { id: 34, use: 'מגורים ד׳',       units: 204, rentalUnits: 0,   requiredIncomingArea: 12340 },
-    { id: 35, use: 'מגורים ד׳',       units: 199, rentalUnits: 0,   requiredIncomingArea: 11743 },
-    { id: 36, use: 'מגורים ד׳',       units: 219, rentalUnits: 0,   requiredIncomingArea: 13187 },
-    { id: 37, use: 'מגורים ד׳',       units: 250, rentalUnits: 0,   requiredIncomingArea: 17180 },
-    { id: 38, use: 'מגורים ד׳',       units: 224, rentalUnits: 0,   requiredIncomingArea: 15086 },
-    { id: 40, use: 'מגורים ד׳',       units: 156, rentalUnits: 0,   requiredIncomingArea: 10283 },
+    { id: 1,  use: 'מגורים ותעסוקה', units: 102, rentalUnits: 0,   employment: 12000, commerce: 770,  requiredIncomingArea: 8536  },
+    { id: 2,  use: 'מגורים ותעסוקה', units: 324, rentalUnits: 0,   employment: 12240, commerce: 1050, requiredIncomingArea: 22309 },
+    { id: 3,  use: 'מגורים ותעסוקה', units: 0,   rentalUnits: 264, employment: 9060,  commerce: 2370, requiredIncomingArea: 8195  },
+    { id: 4,  use: 'מגורים ותעסוקה', units: 96,  rentalUnits: 0,   employment: 10280, commerce: 1820, requiredIncomingArea: 3962  },
+    { id: 5,  use: 'מגורים ותעסוקה', units: 168, rentalUnits: 0,   employment: 9050,  commerce: 1890, requiredIncomingArea: 5856  },
+    { id: 6,  use: 'מגורים ד׳',       units: 0,   rentalUnits: 213, employment: 0,     commerce: 400,  requiredIncomingArea: 1891  },
+    { id: 7,  use: 'מגורים ד׳',       units: 0,   rentalUnits: 234, employment: 0,     commerce: 400,  requiredIncomingArea: 4591  },
+    { id: 8,  use: 'מגורים ד׳',       units: 180, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 10722 },
+    { id: 9,  use: 'מגורים ד׳',       units: 330, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 20518 },
+    { id: 10, use: 'מגורים ד׳',       units: 222, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 14239 },
+    { id: 11, use: 'מגורים ד׳',       units: 230, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 14300 },
+    { id: 12, use: 'מגורים ד׳',       units: 211, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 12463 },
+    { id: 13, use: 'מגורים ד׳',       units: 163, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 10668 },
+    { id: 14, use: 'מגורים ד׳',       units: 81,  rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 4935  },
+    { id: 15, use: 'מגורים ד׳',       units: 143, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 8438  },
+    { id: 16, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 12143 },
+    { id: 17, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 12782 },
+    { id: 18, use: 'מגורים ד׳',       units: 192, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 12931 },
+    { id: 19, use: 'מגורים ד׳',       units: 288, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 18729 },
+    { id: 20, use: 'מגורים ד׳',       units: 201, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 13838 },
+    { id: 21, use: 'מגורים ה׳',       units: 192, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 13232 },
+    { id: 22, use: 'מגורים ד׳',       units: 178, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 11690 },
+    { id: 23, use: 'מגורים ד׳',       units: 0,   rentalUnits: 188, employment: 0,     commerce: 400,  requiredIncomingArea: 3990  },
+    { id: 24, use: 'מגורים ד׳',       units: 176, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 12154 },
+    { id: 25, use: 'מגורים ד׳',       units: 0,   rentalUnits: 267, employment: 0,     commerce: 400,  requiredIncomingArea: 5996  },
+    { id: 26, use: 'מגורים ד׳',       units: 175, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 10843 },
+    { id: 27, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 11760 },
+    { id: 28, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 11334 },
+    { id: 29, use: 'מגורים ד׳',       units: 207, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 12915 },
+    { id: 30, use: 'מגורים ד׳',       units: 201, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 13155 },
+    { id: 31, use: 'מגורים ד׳',       units: 135, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 8961  },
+    { id: 32, use: 'מגורים ד׳',       units: 138, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 9153  },
+    { id: 33, use: 'מגורים ד׳',       units: 202, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 12560 },
+    { id: 34, use: 'מגורים ד׳',       units: 204, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 12340 },
+    { id: 35, use: 'מגורים ד׳',       units: 199, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 11743 },
+    { id: 36, use: 'מגורים ד׳',       units: 219, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 13187 },
+    { id: 37, use: 'מגורים ד׳',       units: 250, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 17180 },
+    { id: 38, use: 'מגורים ד׳',       units: 224, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 15086 },
+    { id: 40, use: 'מגורים ד׳',       units: 156, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 10283 },
   ];
 
   // מצב טאב המגרשים
@@ -1445,20 +1462,26 @@
             return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${parcelHint}${delBtn}</span><span>${fmtSqm(a.area)}</span></div>`;
           }).join('');
 
-      const unitsLabel = l.units > 0 ? `${l.units} דירות` : `${l.rentalUnits} השכרה`;
+      // תגי זכויות בנייה (חיווי ויזואלי)
+      const rightsTags = [];
+      if (l.units > 0)       rightsTags.push(`<span class="rights-tag rights-own">🏠 ${l.units} דירות בעלות</span>`);
+      if (l.rentalUnits > 0) rightsTags.push(`<span class="rights-tag rights-rent">🔑 ${l.rentalUnits} יח"ד השכרה</span>`);
+      if (l.employment > 0)  rightsTags.push(`<span class="rights-tag rights-emp">🏢 ${l.employment.toLocaleString('he-IL')} מ"ר תעסוקה</span>`);
+      if (l.commerce > 0)    rightsTags.push(`<span class="rights-tag rights-com">🛍️ ${l.commerce.toLocaleString('he-IL')} מ"ר מסחר</span>`);
 
       return `
         <div class="lot-card ${statusClass}">
           <div class="lot-card-header">
             <div>
               <div class="lot-card-title">מגרש ${l.id}</div>
-              <div class="lot-card-use">${l.use} · ${unitsLabel}</div>
+              <div class="lot-card-use">${l.use}</div>
             </div>
             ${statusBadge}
           </div>
+          <div class="lot-rights">${rightsTags.join('')}</div>
           <div class="lot-progress"><div class="lot-progress-fill" style="width:${l.pct}%"></div></div>
           <div class="lot-stats">
-            <div class="lot-stat"><div class="lot-stat-label">נדרש</div><div class="lot-stat-value">${fmtSqm(l.required)}</div></div>
+            <div class="lot-stat"><div class="lot-stat-label">שטח חקלאי נדרש</div><div class="lot-stat-value">${fmtSqm(l.required)}</div></div>
             <div class="lot-stat"><div class="lot-stat-label">הוקצה</div><div class="lot-stat-value" style="color:var(--success);">${fmtSqm(l.allocated)}</div></div>
             <div class="lot-stat"><div class="lot-stat-label">נותר</div><div class="lot-stat-value" style="color:${l.remaining > 0 ? 'var(--warning)' : 'var(--success)'};">${l.remaining > 0 ? fmtSqm(l.remaining) : '✓'}</div></div>
           </div>
@@ -1495,10 +1518,19 @@
       return { ...d, used_area: usedArea, remaining_area: (+d.area_sqm || 0) - usedArea };
     }).filter(d => d.remaining_area > 0.5);
 
+    // תגי זכויות לכותרת המודאל
+    const modalRightsTags = [];
+    if (lot.units > 0)       modalRightsTags.push(`<span class="rights-tag rights-own">🏠 ${lot.units} דירות בעלות</span>`);
+    if (lot.rentalUnits > 0) modalRightsTags.push(`<span class="rights-tag rights-rent">🔑 ${lot.rentalUnits} יח"ד השכרה</span>`);
+    if (lot.employment > 0)  modalRightsTags.push(`<span class="rights-tag rights-emp">🏢 ${lot.employment.toLocaleString('he-IL')} מ"ר תעסוקה</span>`);
+    if (lot.commerce > 0)    modalRightsTags.push(`<span class="rights-tag rights-com">🛍️ ${lot.commerce.toLocaleString('he-IL')} מ"ר מסחר</span>`);
+
     document.getElementById('alloc-modal-content').innerHTML = `
       <h2>➕ הוספת הקצאה למגרש ${lotId}</h2>
-      <div style="background:#f9fafb;padding:10px 14px;border-radius:8px;margin:10px 0;font-size:0.88rem;">
-        <strong>${lot.use}</strong> · נדרש: ${fmtSqm(status.required)} · הוקצה: ${fmtSqm(status.allocated)} · <strong style="color:var(--warning);">נותר: ${fmtSqm(remaining)}</strong>
+      <div style="background:#f9fafb;padding:12px 14px;border-radius:8px;margin:10px 0;font-size:0.88rem;">
+        <div style="margin-bottom:6px;"><strong>שימוש:</strong> ${lot.use}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${modalRightsTags.join('')}</div>
+        <div>שטח חקלאי נדרש: <strong>${fmtSqm(status.required)}</strong> · הוקצה: <strong>${fmtSqm(status.allocated)}</strong> · <strong style="color:var(--warning);">נותר: ${fmtSqm(remaining)}</strong></div>
       </div>
 
       <div class="modal-section-title">מקור ההקצאה</div>
