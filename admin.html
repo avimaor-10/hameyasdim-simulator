@@ -1485,6 +1485,9 @@
     const lot = LOTS.find(l => l.id === lotId);
     const status = lotStatus(lot);
     const remaining = status.remaining;
+    // סוג ההקצאה נגזר מהמגרש: dwellingUnits → בעלות, rentalUnits → שכירות
+    const allocType = (lot.rentalUnits > 0 && lot.units === 0) ? 'שכירות' : 'בעלות';
+    const allocTypeLabel = allocType === 'שכירות' ? '🔑 שכירות' : '🏠 בעלות';
 
     // עסקאות זמינות לפי קטגוריה (נדלן נדלן + דודי יצחקי) — שטח שעוד לא הוקצה
     const availableDeals = allDeals.map(d => {
@@ -1522,11 +1525,11 @@
         <input type="hidden" id="alloc-signed-id">
       </div>
 
-      <div class="modal-section-title">סוג הקצאה</div>
-      <select id="alloc-type" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
-        <option value="בעלות">בעלות</option>
-        <option value="שכירות">שכירות</option>
-      </select>
+      <div class="modal-section-title">סוג הקצאה (נקבע אוטומטית לפי המגרש)</div>
+      <div style="padding:10px 14px;background:#f9fafb;border:1px solid var(--border);border-radius:6px;font-weight:600;">
+        ${allocTypeLabel}
+      </div>
+      <input type="hidden" id="alloc-type" value="${allocType}">
 
       <div class="modal-section-title">שטח להקצאה (מ"ר)</div>
       <input type="number" id="alloc-area" min="1" step="0.01" placeholder="עד ${remaining.toFixed(2)} מ\"ר" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
