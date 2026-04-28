@@ -361,6 +361,164 @@
     margin-bottom: 8px;
     font-size: 0.95rem;
   }
+  /* ===== טאבים ===== */
+  .tabs-nav {
+    background: white;
+    border-bottom: 2px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    padding: 14px 22px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .tab-btn:hover { color: var(--primary); background: #f9fafb; }
+  .tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  /* ===== כרטיסי מגרשים סחירים ===== */
+  .lots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+  }
+  .lot-card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: box-shadow 0.15s;
+  }
+  .lot-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .lot-card.locked { border-color: var(--success); background: #f0fdf4; }
+  .lot-card.partial { border-color: var(--warning); }
+  .lot-card.empty { opacity: 0.7; }
+  .lot-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .lot-card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+  .lot-card-use {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .lot-status-badge {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .lot-status-locked  { background: var(--success-light); color: #065f46; }
+  .lot-status-partial { background: var(--warning-light); color: #92400e; }
+  .lot-status-empty   { background: #f3f4f6; color: var(--text-muted); }
+  .lot-progress {
+    height: 8px;
+    background: #f3f4f6;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 8px 0;
+  }
+  .lot-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--warning) 0%, var(--success) 100%);
+    transition: width 0.3s;
+  }
+  .lot-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin: 8px 0;
+    font-size: 0.82rem;
+  }
+  .lot-stat {
+    text-align: center;
+  }
+  .lot-stat-label {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+  }
+  .lot-stat-value {
+    font-weight: 700;
+    color: var(--text);
+    margin-top: 2px;
+  }
+  .lot-allocations {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    font-size: 0.83rem;
+  }
+  .alloc-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+  }
+  .alloc-source-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    font-weight: 600;
+  }
+  .alloc-source-signed { background: #dbeafe; color: #1e40af; }
+  .alloc-source-nadlan { background: #fed7aa; color: #9a3412; }
+  .alloc-source-yitzhaki { background: #e9d5ff; color: #6b21a8; }
+  .alloc-empty { color: var(--text-muted); font-style: italic; padding: 6px 0; }
+  .lot-add-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 8px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+  .lot-add-btn:hover { background: var(--primary-light); }
+  .lot-filters {
+    display: flex;
+    gap: 10px;
+    margin: 14px 0;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .lot-filters input, .lot-filters select {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
 </style>
 </head>
 <body>
@@ -379,6 +537,15 @@
   </div>
 </div>
 
+<nav class="tabs-nav">
+  <button class="tab-btn active" data-tab="users">👥 ניהול משתמשים</button>
+  <button class="tab-btn" data-tab="allocations">🎯 שיבוץ מגרשים</button>
+</nav>
+
+<!-- ============================================================ -->
+<!-- טאב 1: ניהול משתמשים (התוכן הקיים)                            -->
+<!-- ============================================================ -->
+<div class="tab-content active" id="tab-users">
 <div class="container">
   <div class="stats-grid" id="stats-grid">
     <div class="stat-card">
@@ -460,10 +627,76 @@
     </table>
   </div>
 </div>
+</div><!-- /tab-users -->
+
+<!-- ============================================================ -->
+<!-- טאב 2: שיבוץ מגרשים סחירים                                    -->
+<!-- ============================================================ -->
+<div class="tab-content" id="tab-allocations">
+<div class="container">
+  <div class="stats-grid" id="alloc-stats">
+    <div class="stat-card">
+      <div class="label">סה"כ מגרשים סחירים</div>
+      <div class="value" id="stat-lots-total">-</div>
+    </div>
+    <div class="stat-card approved">
+      <div class="label">נעולים במלואם</div>
+      <div class="value" id="stat-lots-locked">-</div>
+    </div>
+    <div class="stat-card pending">
+      <div class="label">חלקיים</div>
+      <div class="value" id="stat-lots-partial">-</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">ריקים</div>
+      <div class="value" id="stat-lots-empty">-</div>
+    </div>
+    <div class="stat-card info">
+      <div class="label">סה"כ שטח נדרש</div>
+      <div class="value" id="stat-lots-required" style="font-size:1.2rem;">-</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="label">סה"כ הוקצה</div>
+      <div class="value" id="stat-lots-allocated" style="font-size:1.2rem;">-</div>
+    </div>
+  </div>
+
+  <div class="lot-filters">
+    <input type="text" id="lot-search" placeholder="🔍 חיפוש מגרש (מספר / שימוש)">
+    <select id="lot-status-filter">
+      <option value="">כל הסטטוסים</option>
+      <option value="locked">נעולים</option>
+      <option value="partial">חלקיים</option>
+      <option value="empty">ריקים</option>
+    </select>
+    <select id="lot-sort">
+      <option value="id">מיון לפי מספר</option>
+      <option value="locked-desc">מיון לפי % נעילה (יורד)</option>
+      <option value="locked-asc">מיון לפי % נעילה (עולה)</option>
+      <option value="area-desc">שטח נדרש (יורד)</option>
+    </select>
+    <button id="alloc-refresh-btn" class="btn-sm btn-view">🔄 רענן</button>
+  </div>
+
+  <div class="lots-grid" id="lots-grid">
+    <div style="grid-column:1/-1;text-align:center;padding:40px;color:#9ca3af;">
+      <div class="spinner"></div>
+      <div style="margin-top:8px;">טוען מגרשים...</div>
+    </div>
+  </div>
+</div>
+</div><!-- /tab-allocations -->
 
 <!-- מודאל פרטי משתמש -->
 <div class="modal-overlay" id="user-modal">
   <div class="modal" id="user-modal-content">
+    <!-- תוכן מוזרק דינמית -->
+  </div>
+</div>
+
+<!-- מודאל הוספת הקצאה למגרש -->
+<div class="modal-overlay" id="alloc-modal">
+  <div class="modal" id="alloc-modal-content">
     <!-- תוכן מוזרק דינמית -->
   </div>
 </div>
@@ -983,6 +1216,373 @@
   document.getElementById('match-filter').addEventListener('change', renderTable);
   document.getElementById('refresh-btn').addEventListener('click', loadData);
   document.getElementById('export-btn').addEventListener('click', exportToCsv);
+
+  // ============================================================
+  // ===== טאב 2: שיבוץ מגרשים סחירים =====
+  // ============================================================
+
+  // נתוני 38 המגרשים מהפרויקט (תואם PROJECT.LOTS ב-index.html)
+  const LOTS = [
+    { id: 1,  use: 'מגורים ותעסוקה', units: 102, rentalUnits: 0,   requiredIncomingArea: 8536  },
+    { id: 2,  use: 'מגורים ותעסוקה', units: 324, rentalUnits: 0,   requiredIncomingArea: 22309 },
+    { id: 3,  use: 'מגורים ותעסוקה', units: 0,   rentalUnits: 264, requiredIncomingArea: 8195  },
+    { id: 4,  use: 'מגורים ותעסוקה', units: 96,  rentalUnits: 0,   requiredIncomingArea: 3962  },
+    { id: 5,  use: 'מגורים ותעסוקה', units: 168, rentalUnits: 0,   requiredIncomingArea: 5856  },
+    { id: 6,  use: 'מגורים ד׳',       units: 0,   rentalUnits: 213, requiredIncomingArea: 1891  },
+    { id: 7,  use: 'מגורים ד׳',       units: 0,   rentalUnits: 234, requiredIncomingArea: 4591  },
+    { id: 8,  use: 'מגורים ד׳',       units: 180, rentalUnits: 0,   requiredIncomingArea: 10722 },
+    { id: 9,  use: 'מגורים ד׳',       units: 330, rentalUnits: 0,   requiredIncomingArea: 20518 },
+    { id: 10, use: 'מגורים ד׳',       units: 222, rentalUnits: 0,   requiredIncomingArea: 14239 },
+    { id: 11, use: 'מגורים ד׳',       units: 230, rentalUnits: 0,   requiredIncomingArea: 14300 },
+    { id: 12, use: 'מגורים ד׳',       units: 211, rentalUnits: 0,   requiredIncomingArea: 12463 },
+    { id: 13, use: 'מגורים ד׳',       units: 163, rentalUnits: 0,   requiredIncomingArea: 10668 },
+    { id: 14, use: 'מגורים ד׳',       units: 81,  rentalUnits: 0,   requiredIncomingArea: 4935  },
+    { id: 15, use: 'מגורים ד׳',       units: 143, rentalUnits: 0,   requiredIncomingArea: 8438  },
+    { id: 16, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 12143 },
+    { id: 17, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 12782 },
+    { id: 18, use: 'מגורים ד׳',       units: 192, rentalUnits: 0,   requiredIncomingArea: 12931 },
+    { id: 19, use: 'מגורים ד׳',       units: 288, rentalUnits: 0,   requiredIncomingArea: 18729 },
+    { id: 20, use: 'מגורים ד׳',       units: 201, rentalUnits: 0,   requiredIncomingArea: 13838 },
+    { id: 21, use: 'מגורים ה׳',       units: 192, rentalUnits: 0,   requiredIncomingArea: 13232 },
+    { id: 22, use: 'מגורים ד׳',       units: 178, rentalUnits: 0,   requiredIncomingArea: 11690 },
+    { id: 23, use: 'מגורים ד׳',       units: 0,   rentalUnits: 188, requiredIncomingArea: 3990  },
+    { id: 24, use: 'מגורים ד׳',       units: 176, rentalUnits: 0,   requiredIncomingArea: 12154 },
+    { id: 25, use: 'מגורים ד׳',       units: 0,   rentalUnits: 267, requiredIncomingArea: 5996  },
+    { id: 26, use: 'מגורים ד׳',       units: 175, rentalUnits: 0,   requiredIncomingArea: 10843 },
+    { id: 27, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 11760 },
+    { id: 28, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   requiredIncomingArea: 11334 },
+    { id: 29, use: 'מגורים ד׳',       units: 207, rentalUnits: 0,   requiredIncomingArea: 12915 },
+    { id: 30, use: 'מגורים ד׳',       units: 201, rentalUnits: 0,   requiredIncomingArea: 13155 },
+    { id: 31, use: 'מגורים ד׳',       units: 135, rentalUnits: 0,   requiredIncomingArea: 8961  },
+    { id: 32, use: 'מגורים ד׳',       units: 138, rentalUnits: 0,   requiredIncomingArea: 9153  },
+    { id: 33, use: 'מגורים ד׳',       units: 202, rentalUnits: 0,   requiredIncomingArea: 12560 },
+    { id: 34, use: 'מגורים ד׳',       units: 204, rentalUnits: 0,   requiredIncomingArea: 12340 },
+    { id: 35, use: 'מגורים ד׳',       units: 199, rentalUnits: 0,   requiredIncomingArea: 11743 },
+    { id: 36, use: 'מגורים ד׳',       units: 219, rentalUnits: 0,   requiredIncomingArea: 13187 },
+    { id: 37, use: 'מגורים ד׳',       units: 250, rentalUnits: 0,   requiredIncomingArea: 17180 },
+    { id: 38, use: 'מגורים ד׳',       units: 224, rentalUnits: 0,   requiredIncomingArea: 15086 },
+    { id: 40, use: 'מגורים ד׳',       units: 156, rentalUnits: 0,   requiredIncomingArea: 10283 },
+  ];
+
+  // מצב טאב המגרשים
+  let allDeals = [];           // כל העסקאות מ-partnership_deals
+  let allDealAllocations = []; // כל ההקצאות מ-deal_lot_allocations
+  // allocationsByLot: lot_id -> [{source, owner_name, area, ...}]
+  let allocationsByLot = {};
+
+  // ===== מעבר בין טאבים =====
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabName = btn.dataset.tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + tabName).classList.add('active');
+      if (tabName === 'allocations' && Object.keys(allocationsByLot).length === 0) {
+        loadAllocations();
+      }
+    });
+  });
+
+  // ===== טעינת נתוני שיבוץ =====
+  async function loadAllocations() {
+    const grid = document.getElementById('lots-grid');
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;"><div class="spinner"></div><div style="margin-top:8px;">טוען...</div></div>`;
+
+    const [dealsRes, dealAllocRes, selsRes] = await Promise.all([
+      supabase.from('partnership_deals').select('*').eq('is_active', true).order('deal_number'),
+      supabase.from('deal_lot_allocations').select('*'),
+      supabase.from('selections').select('*').eq('is_current', true),
+    ]);
+
+    if (dealsRes.error) {
+      grid.innerHTML = `<div style="grid-column:1/-1;color:#dc2626;text-align:center;padding:30px;">שגיאה: ${dealsRes.error.message}</div>`;
+      return;
+    }
+
+    allDeals = dealsRes.data || [];
+    allDealAllocations = dealAllocRes.data || [];
+
+    // אגרגציה לפי lot_id
+    allocationsByLot = {};
+
+    // 1) הקצאות מ-selections (חתומים מקור — בחירה עצמית)
+    (selsRes.data || []).forEach(sel => {
+      const lots = Array.isArray(sel.selected_lots) ? sel.selected_lots : [];
+      const userInfo = allUsers.find(u => u.id === sel.user_id);
+      const ownerName = userInfo?.full_name || 'משתמש לא ידוע';
+      const ownerId = userInfo?.id_number || '';
+      lots.forEach(l => {
+        const lotId = +l.lot_id;
+        if (!allocationsByLot[lotId]) allocationsByLot[lotId] = [];
+        allocationsByLot[lotId].push({
+          source: 'signed',
+          source_label: 'חתום מקור',
+          owner_name: ownerName,
+          owner_id: ownerId,
+          area: +l.allocated_area || 0,
+          allocation_id: null,  // לא ניתן למחוק מטאב זה
+          deal_id: null,
+        });
+      });
+    });
+
+    // 2) הקצאות מ-deal_lot_allocations (נדלן נדלן / דודי יצחקי)
+    allDealAllocations.forEach(a => {
+      const deal = allDeals.find(d => d.id === a.deal_id);
+      if (!deal) return;
+      const sourceKey = deal.category === 'נדלן נדלן' ? 'nadlan' : 'yitzhaki';
+      if (!allocationsByLot[a.lot_id]) allocationsByLot[a.lot_id] = [];
+      allocationsByLot[a.lot_id].push({
+        source: sourceKey,
+        source_label: deal.category,
+        owner_name: deal.deal_name,
+        owner_id: '',
+        area: +a.allocated_area || 0,
+        allocation_id: a.id,
+        deal_id: deal.id,
+        allocation_type: a.allocation_type,
+      });
+    });
+
+    renderLots();
+  }
+
+  // ===== חישוב סטטוס מגרש =====
+  function lotStatus(lot) {
+    const allocs = allocationsByLot[lot.id] || [];
+    const allocated = allocs.reduce((s, a) => s + a.area, 0);
+    const required = lot.requiredIncomingArea;
+    const remaining = required - allocated;
+    const pct = required > 0 ? Math.min(100, (allocated / required) * 100) : 0;
+    let status = 'empty';
+    if (allocated >= required - 0.5) status = 'locked';
+    else if (allocated > 0) status = 'partial';
+    return { allocated, required, remaining, pct, status, allocs };
+  }
+
+  // ===== רינדור כרטיסי המגרשים =====
+  function renderLots() {
+    const search = document.getElementById('lot-search').value.trim().toLowerCase();
+    const statusFilter = document.getElementById('lot-status-filter').value;
+    const sortBy = document.getElementById('lot-sort').value;
+
+    let lotsWithStatus = LOTS.map(l => ({ ...l, ...lotStatus(l) }));
+
+    // סינון
+    if (search) {
+      lotsWithStatus = lotsWithStatus.filter(l =>
+        String(l.id).includes(search) || (l.use || '').toLowerCase().includes(search)
+      );
+    }
+    if (statusFilter) {
+      lotsWithStatus = lotsWithStatus.filter(l => l.status === statusFilter);
+    }
+
+    // מיון
+    if (sortBy === 'locked-desc') lotsWithStatus.sort((a, b) => b.pct - a.pct);
+    else if (sortBy === 'locked-asc') lotsWithStatus.sort((a, b) => a.pct - b.pct);
+    else if (sortBy === 'area-desc') lotsWithStatus.sort((a, b) => b.required - a.required);
+    else lotsWithStatus.sort((a, b) => a.id - b.id);
+
+    // עדכון סטטיסטיקה
+    const allWithStatus = LOTS.map(l => lotStatus(l));
+    document.getElementById('stat-lots-total').textContent = LOTS.length;
+    document.getElementById('stat-lots-locked').textContent = allWithStatus.filter(s => s.status === 'locked').length;
+    document.getElementById('stat-lots-partial').textContent = allWithStatus.filter(s => s.status === 'partial').length;
+    document.getElementById('stat-lots-empty').textContent = allWithStatus.filter(s => s.status === 'empty').length;
+    const totalReq = allWithStatus.reduce((s, x) => s + x.required, 0);
+    const totalAlloc = allWithStatus.reduce((s, x) => s + x.allocated, 0);
+    document.getElementById('stat-lots-required').textContent = fmtSqm(totalReq);
+    document.getElementById('stat-lots-allocated').textContent = fmtSqm(totalAlloc) + ` (${((totalAlloc/totalReq)*100).toFixed(1)}%)`;
+
+    if (lotsWithStatus.length === 0) {
+      document.getElementById('lots-grid').innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:#9ca3af;">אין מגרשים תואמים לסינון</div>`;
+      return;
+    }
+
+    document.getElementById('lots-grid').innerHTML = lotsWithStatus.map(l => {
+      const statusClass = l.status === 'locked' ? 'locked' : l.status === 'partial' ? 'partial' : 'empty';
+      const statusBadge = l.status === 'locked' ? `<span class="lot-status-badge lot-status-locked">🔒 נעול 100%</span>`
+                       : l.status === 'partial' ? `<span class="lot-status-badge lot-status-partial">⏳ ${l.pct.toFixed(0)}%</span>`
+                       :                           `<span class="lot-status-badge lot-status-empty">○ ריק</span>`;
+
+      const allocsHtml = l.allocs.length === 0
+        ? `<div class="alloc-empty">אין הקצאות עדיין</div>`
+        : l.allocs.map(a => {
+            const badge = a.source === 'signed'   ? `<span class="alloc-source-badge alloc-source-signed">🔵 חתום מקור</span>`
+                       :  a.source === 'nadlan'   ? `<span class="alloc-source-badge alloc-source-nadlan">🏢 נדלן נדלן</span>`
+                       :                            `<span class="alloc-source-badge alloc-source-yitzhaki">👤 דודי יצחקי</span>`;
+            const delBtn = a.allocation_id ? `<button class="btn-sm btn-reject" data-action="del-alloc" data-id="${a.allocation_id}" style="padding:1px 6px;font-size:0.7rem;margin-right:4px;">✗</button>` : '';
+            return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${delBtn}</span><span>${fmtSqm(a.area)}</span></div>`;
+          }).join('');
+
+      const unitsLabel = l.units > 0 ? `${l.units} דירות` : `${l.rentalUnits} השכרה`;
+
+      return `
+        <div class="lot-card ${statusClass}">
+          <div class="lot-card-header">
+            <div>
+              <div class="lot-card-title">מגרש ${l.id}</div>
+              <div class="lot-card-use">${l.use} · ${unitsLabel}</div>
+            </div>
+            ${statusBadge}
+          </div>
+          <div class="lot-progress"><div class="lot-progress-fill" style="width:${l.pct}%"></div></div>
+          <div class="lot-stats">
+            <div class="lot-stat"><div class="lot-stat-label">נדרש</div><div class="lot-stat-value">${fmtSqm(l.required)}</div></div>
+            <div class="lot-stat"><div class="lot-stat-label">הוקצה</div><div class="lot-stat-value" style="color:var(--success);">${fmtSqm(l.allocated)}</div></div>
+            <div class="lot-stat"><div class="lot-stat-label">נותר</div><div class="lot-stat-value" style="color:${l.remaining > 0 ? 'var(--warning)' : 'var(--success)'};">${l.remaining > 0 ? fmtSqm(l.remaining) : '✓'}</div></div>
+          </div>
+          <div class="lot-allocations">${allocsHtml}</div>
+          ${l.status !== 'locked' ? `<button class="lot-add-btn" data-action="add-alloc" data-lot="${l.id}">➕ הוסף הקצאה</button>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    // אירועי כפתורים
+    document.querySelectorAll('[data-action="add-alloc"]').forEach(btn => {
+      btn.addEventListener('click', () => openAllocModal(+btn.dataset.lot));
+    });
+    document.querySelectorAll('[data-action="del-alloc"]').forEach(btn => {
+      btn.addEventListener('click', () => deleteAllocation(btn.dataset.id));
+    });
+  }
+
+  // ===== מודאל הוספת הקצאה =====
+  function openAllocModal(lotId) {
+    const lot = LOTS.find(l => l.id === lotId);
+    const status = lotStatus(lot);
+    const remaining = status.remaining;
+
+    // עסקאות זמינות לפי קטגוריה (נדלן נדלן + דודי יצחקי) — שטח שעוד לא הוקצה
+    const availableDeals = allDeals.map(d => {
+      const usedArea = allDealAllocations.filter(a => a.deal_id === d.id).reduce((s, a) => s + (+a.allocated_area || 0), 0);
+      return { ...d, used_area: usedArea, remaining_area: (+d.area_sqm || 0) - usedArea };
+    }).filter(d => d.remaining_area > 0.5);
+
+    document.getElementById('alloc-modal-content').innerHTML = `
+      <h2>➕ הוספת הקצאה למגרש ${lotId}</h2>
+      <div style="background:#f9fafb;padding:10px 14px;border-radius:8px;margin:10px 0;font-size:0.88rem;">
+        <strong>${lot.use}</strong> · נדרש: ${fmtSqm(status.required)} · הוקצה: ${fmtSqm(status.allocated)} · <strong style="color:var(--warning);">נותר: ${fmtSqm(remaining)}</strong>
+      </div>
+
+      <div class="modal-section-title">מקור ההקצאה</div>
+      <select id="alloc-source" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+        <option value="">בחר מקור...</option>
+        <option value="nadlan">🏢 נדלן נדלן</option>
+        <option value="yitzhaki">👤 דודי יצחקי</option>
+      </select>
+
+      <div id="alloc-deal-section" style="display:none;margin-top:10px;">
+        <div class="modal-section-title">בחר עסקה</div>
+        <select id="alloc-deal" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+          <option value="">בחר עסקה...</option>
+        </select>
+        <div id="alloc-deal-info" style="font-size:0.83rem;color:var(--text-muted);margin-top:6px;"></div>
+      </div>
+
+      <div class="modal-section-title">סוג הקצאה</div>
+      <select id="alloc-type" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+        <option value="בעלות">בעלות</option>
+        <option value="שכירות">שכירות</option>
+      </select>
+
+      <div class="modal-section-title">שטח להקצאה (מ"ר)</div>
+      <input type="number" id="alloc-area" min="1" step="0.01" placeholder="עד ${remaining.toFixed(2)} מ\"ר" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+
+      <div class="modal-section-title">הערה (אופציונלי)</div>
+      <textarea id="alloc-notes" placeholder="הערה..." style="min-height:50px;"></textarea>
+
+      <div class="modal-actions">
+        <button class="btn-sm btn-approve" id="alloc-save-btn">💾 שמור הקצאה</button>
+        <button class="btn-sm" id="alloc-close-btn" style="background:#e5e7eb;color:#1f2937;">ביטול</button>
+      </div>
+    `;
+
+    document.getElementById('alloc-modal').classList.add('visible');
+
+    // אירועים
+    const sourceSel = document.getElementById('alloc-source');
+    const dealSection = document.getElementById('alloc-deal-section');
+    const dealSel = document.getElementById('alloc-deal');
+    const dealInfo = document.getElementById('alloc-deal-info');
+
+    sourceSel.addEventListener('change', () => {
+      const cat = sourceSel.value === 'nadlan' ? 'נדלן נדלן' : sourceSel.value === 'yitzhaki' ? 'דודי יצחקי' : null;
+      if (!cat) { dealSection.style.display = 'none'; return; }
+      const deals = availableDeals.filter(d => d.category === cat);
+      dealSel.innerHTML = '<option value="">בחר עסקה...</option>' + deals.map(d =>
+        `<option value="${d.id}">#${d.deal_number} ${d.deal_name} · חלקה ${d.parcel} · נותר ${d.remaining_area.toFixed(0)} מ"ר</option>`
+      ).join('');
+      dealSection.style.display = 'block';
+      dealInfo.textContent = '';
+    });
+
+    dealSel.addEventListener('change', () => {
+      const deal = availableDeals.find(d => d.id === dealSel.value);
+      if (!deal) { dealInfo.textContent = ''; return; }
+      dealInfo.textContent = `סטטוס: ${deal.status} · סה"כ עסקה: ${(+deal.area_sqm).toFixed(2)} מ"ר · הוקצה: ${deal.used_area.toFixed(2)} · נותר: ${deal.remaining_area.toFixed(2)}`;
+    });
+
+    document.getElementById('alloc-close-btn').addEventListener('click', closeAllocModal);
+    document.getElementById('alloc-save-btn').addEventListener('click', () => saveAllocation(lotId, remaining));
+  }
+
+  function closeAllocModal() {
+    document.getElementById('alloc-modal').classList.remove('visible');
+  }
+
+  document.getElementById('alloc-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'alloc-modal') closeAllocModal();
+  });
+
+  async function saveAllocation(lotId, lotRemaining) {
+    const dealId = document.getElementById('alloc-deal').value;
+    const allocType = document.getElementById('alloc-type').value;
+    const areaRaw = document.getElementById('alloc-area').value;
+    const notes = document.getElementById('alloc-notes').value.trim();
+
+    if (!dealId) { alert('יש לבחור עסקה'); return; }
+    const area = parseFloat(areaRaw);
+    if (!area || area <= 0) { alert('יש להזין שטח חיובי'); return; }
+    if (area > lotRemaining + 0.5) {
+      if (!confirm(`השטח שהוזן (${area} מ"ר) גדול מהנותר במגרש (${lotRemaining.toFixed(2)} מ"ר). להמשיך בכל זאת?`)) return;
+    }
+
+    // בדיקה שלא חורגים מהשטח הנותר בעסקה
+    const deal = allDeals.find(d => d.id === dealId);
+    const usedArea = allDealAllocations.filter(a => a.deal_id === dealId).reduce((s, a) => s + (+a.allocated_area || 0), 0);
+    const dealRemaining = (+deal.area_sqm || 0) - usedArea;
+    if (area > dealRemaining + 0.5) {
+      if (!confirm(`השטח חורג מהנותר בעסקה (${dealRemaining.toFixed(2)} מ"ר). להמשיך?`)) return;
+    }
+
+    const { error } = await supabase.from('deal_lot_allocations').insert({
+      deal_id: dealId,
+      lot_id: lotId,
+      allocation_type: allocType,
+      allocated_area: area,
+      notes: notes || null,
+    });
+
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    closeAllocModal();
+    await loadAllocations();
+  }
+
+  async function deleteAllocation(allocId) {
+    if (!confirm('למחוק את ההקצאה?')) return;
+    const { error } = await supabase.from('deal_lot_allocations').delete().eq('id', allocId);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    await loadAllocations();
+  }
+
+  // אירועי טאב המגרשים
+  document.getElementById('lot-search').addEventListener('input', renderLots);
+  document.getElementById('lot-status-filter').addEventListener('change', renderLots);
+  document.getElementById('lot-sort').addEventListener('change', renderLots);
+  document.getElementById('alloc-refresh-btn').addEventListener('click', loadAllocations);
 
   // טעינה ראשונית
   await loadData();
