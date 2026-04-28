@@ -741,6 +741,9 @@
   let allProfiles = {};
   let allSelections = [];       // כל הבחירות השמורות של המשתמשים
   let allSignedOwners = [];     // רשימת הבעלים החתומים על הסכם ניהול
+  let allDeals = [];             // עסקאות נדלן נדלן + דודי יצחקי
+  let allDealAllocations = [];   // הקצאות עסקה למגרש (מאדמין)
+  let allSignedAllocations = []; // הקצאות אדמין של חתום מקור למגרש
   let profileByNormalizedId = new Map();  // ת"ז מנורמל → profile
   let selectionByUserId = new Map();      // user_id → selection
 
@@ -752,11 +755,14 @@
   }
 
   async function loadData() {
-    const [parcelsRes, profilesRes, selectionsRes, signedRes] = await Promise.all([
+    const [parcelsRes, profilesRes, selectionsRes, signedRes, dealsRes, dealAllocRes, signedAllocRes] = await Promise.all([
       supabase.from('user_parcels').select('*'),
       supabase.from('profiles').select('id, full_name, email, phone, approval_status, id_number'),
       supabase.from('selections').select('*').eq('is_current', true),
       supabase.from('signed_owners').select('*').eq('is_active', true),
+      supabase.from('partnership_deals').select('*').eq('is_active', true),
+      supabase.from('deal_lot_allocations').select('*'),
+      supabase.from('signed_owner_lot_allocations').select('*'),
     ]);
 
     if (parcelsRes.error || profilesRes.error || signedRes.error) {
@@ -776,6 +782,9 @@
     allSelections = selectionsRes.data || [];
     selectionByUserId = new Map(allSelections.map(s => [s.user_id, s]));
     allSignedOwners = signedRes.data || [];
+    allDeals = dealsRes.data || [];
+    allDealAllocations = dealAllocRes.data || [];
+    allSignedAllocations = signedAllocRes.data || [];
 
     render();
     renderLots();
@@ -973,8 +982,10 @@
     const typeFilter = document.getElementById('lot-type-filter').value;
     const sort = document.getElementById('lot-sort').value;
 
-    // בניית מפה: lot_id → מערך של תורמים {userId, name, area, sharePercent, sourceParcel, approval_status}
+    // בניית מפה: lot_id → מערך של תורמים {userId, name, area, sharePercent, sourceParcel, approval_status, kind}
     const contributorsByLot = {};
+
+    // 1) תורמים מבחירת לקוחות בסימולטור (selections)
     allSelections.forEach(sel => {
       const profile = allProfiles[sel.user_id];
       if (!profile) return;
@@ -989,10 +1000,10 @@
 
       lots.forEach(l => {
         const area = +l.allocated_area || 0;
-        // דלג על הקצאות ריקות / לא תקפות (למשל נתונים ישנים מלפני תיקון הבאג)
         if (area <= 0) return;
         if (!contributorsByLot[l.lot_id]) contributorsByLot[l.lot_id] = [];
         contributorsByLot[l.lot_id].push({
+          kind: 'signed-self',
           userId: sel.user_id,
           name: profile.full_name || 'משתמש לא ידוע',
           approval_status: profile.approval_status,
@@ -1002,6 +1013,50 @@
           sourceParcel,
           isSigner,
         });
+      });
+    });
+
+    // 2) הקצאות אדמין של חתומי מקור (signed_owner_lot_allocations)
+    allSignedAllocations.forEach(a => {
+      const owner = allSignedOwners.find(o => o.id === a.signed_owner_id);
+      if (!owner) return;
+      const area = +a.allocated_area || 0;
+      if (area <= 0) return;
+      const lotId = +a.lot_id;
+      if (!contributorsByLot[lotId]) contributorsByLot[lotId] = [];
+      const lot = LOTS.find(L => L.id === lotId);
+      const sharePercent = lot && lot.requiredIncomingArea > 0 ? area / lot.requiredIncomingArea : 0;
+      contributorsByLot[lotId].push({
+        kind: 'signed-admin',
+        name: owner.owner_name,
+        approval_status: 'approved',
+        area,
+        sharePercent,
+        sourceBlock: owner.gush || 3852,
+        sourceParcel: owner.parcel,
+        isSigner: true,
+      });
+    });
+
+    // 3) הקצאות עסקה (deal_lot_allocations) — נדלן נדלן / דודי יצחקי
+    allDealAllocations.forEach(a => {
+      const deal = allDeals.find(d => d.id === a.deal_id);
+      if (!deal) return;
+      const area = +a.allocated_area || 0;
+      if (area <= 0) return;
+      const lotId = +a.lot_id;
+      if (!contributorsByLot[lotId]) contributorsByLot[lotId] = [];
+      const lot = LOTS.find(L => L.id === lotId);
+      const sharePercent = lot && lot.requiredIncomingArea > 0 ? area / lot.requiredIncomingArea : 0;
+      contributorsByLot[lotId].push({
+        kind: deal.category === 'נדלן נדלן' ? 'nadlan' : 'yitzhaki',
+        name: deal.deal_name,
+        approval_status: 'approved',
+        area,
+        sharePercent,
+        sourceBlock: deal.gush || 3852,
+        sourceParcel: deal.parcel,
+        isSigner: true,
       });
     });
 
@@ -1055,16 +1110,19 @@
                 .sort((a, b) => b.area - a.area)
                 .map(c => {
                   const pendingNote = c.approval_status !== 'approved' ? ' ⏳' : '';
-                  const signerBadge = c.isSigner
-                    ? '<span style="background:#ecfdf5;color:#065f46;padding:1px 6px;border-radius:8px;font-size:0.7rem;font-weight:600;margin-right:4px;border:1px solid #a7f3d0;">✓ חתום</span>'
-                    : '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:0.7rem;font-weight:600;margin-right:4px;border:1px solid #fcd34d;">⚠ לא חתום</span>';
+                  // תג מקור: לקוח/אדמין/נדלן נדלן/דודי יצחקי
+                  let kindBadge = '';
+                  if (c.kind === 'signed-self')       kindBadge = '<span style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:8px;font-size:0.7rem;font-weight:600;margin-right:4px;border:1px solid #93c5fd;">🔵 חתום (לקוח)</span>';
+                  else if (c.kind === 'signed-admin') kindBadge = '<span style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:8px;font-size:0.7rem;font-weight:600;margin-right:4px;border:1px solid #93c5fd;">🔵 חתום (אדמין)</span>';
+                  else if (c.kind === 'nadlan')       kindBadge = '<span style="background:#fed7aa;color:#9a3412;padding:1px 6px;border-radius:8px;font-size:0.7rem;font-weight:600;margin-right:4px;border:1px solid #fdba74;">🏢 נדלן נדלן</span>';
+                  else if (c.kind === 'yitzhaki')     kindBadge = '<span style="background:#e9d5ff;color:#6b21a8;padding:1px 6px;border-radius:8px;font-size:0.7rem;font-weight:600;margin-right:4px;border:1px solid #d8b4fe;">👤 דודי יצחקי</span>';
                   const sourceInfo = c.sourceParcel
                     ? `<span style="color:var(--text-muted);font-size:0.78rem;">מחלקה ${c.sourceBlock}/${c.sourceParcel}</span>`
                     : '<span style="color:#9ca3af;font-size:0.78rem;">חלקה לא ידועה</span>';
                   return `
                     <div class="contributor-row" style="flex-wrap:wrap;gap:6px;">
                       <span class="name" style="flex:1;min-width:160px;">
-                        ${c.name}${pendingNote}${signerBadge}
+                        ${c.name}${pendingNote}${kindBadge}
                         <div style="margin-top:2px;">${sourceInfo}</div>
                       </span>
                       <span style="text-align:left;">
