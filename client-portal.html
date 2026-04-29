@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>האזור האישי שלך | סימולטור עסקת קומבינציה</title>
+<style>
+  :root {
+    --primary: #1a3a5c;
+    --primary-light: #2c5f94;
+    --accent: #c9a961;
+    --success: #2d7a3e;
+    --success-light: #d1fae5;
+    --danger: #dc2626;
+    --warning: #d97706;
+    --warning-light: #fff4e0;
+    --bg: #f7f5f0;
+    --card: #ffffff;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+  .topbar {
+    background: var(--primary);
+    color: white;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .topbar h1 {
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+  .topbar-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-size: 0.9rem;
+  }
+  .topbar-actions a, .topbar-actions button {
+    color: white;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 14px;
+    border-radius: 6px;
+    text-decoration: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+  }
+  .topbar-actions a:hover, .topbar-actions button:hover {
+    background: rgba(255,255,255,0.2);
+  }
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  .hero {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    color: white;
+    border-radius: 14px;
+    padding: 32px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .hero h2 {
+    font-size: 1.65rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .hero .subtitle {
+    opacity: 0.9;
+    font-size: 1rem;
+    margin-bottom: 16px;
+  }
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .hero-stat {
+    background: rgba(255,255,255,0.15);
+    padding: 14px 18px;
+    border-radius: 10px;
+    backdrop-filter: blur(4px);
+  }
+  .hero-stat .label {
+    font-size: 0.82rem;
+    opacity: 0.85;
+    margin-bottom: 4px;
+  }
+  .hero-stat .value {
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+  .section {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .section h3 {
+    font-size: 1.15rem;
+    color: var(--primary);
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .my-allocs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .my-alloc-card {
+    background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
+    border: 2px solid var(--accent);
+    border-radius: 10px;
+    padding: 16px 18px;
+    box-shadow: 0 2px 6px rgba(201, 169, 97, 0.15);
+  }
+  .my-alloc-card .lot-num {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 4px;
+  }
+  .my-alloc-card .lot-use {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+  }
+  .my-alloc-card .alloc-area {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--success);
+    margin-bottom: 6px;
+  }
+  .my-alloc-card .alloc-meta {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .empty-state {
+    text-align: center;
+    padding: 36px 20px;
+    color: var(--text-muted);
+  }
+  .empty-state .big {
+    font-size: 2.5rem;
+    margin-bottom: 8px;
+    opacity: 0.5;
+  }
+  .all-lots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px;
+  }
+  .lot-tile {
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 8px;
+    text-align: center;
+    transition: all 0.15s;
+    background: white;
+    position: relative;
+  }
+  .lot-tile.locked {
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    border-color: #9ca3af;
+    color: var(--text-muted);
+  }
+  .lot-tile.partial {
+    background: linear-gradient(135deg, #fff4e0 0%, #ffe4b5 100%);
+    border-color: var(--warning);
+  }
+  .lot-tile.empty {
+    background: white;
+    border-color: var(--border);
+  }
+  .lot-tile.mine {
+    background: linear-gradient(135deg, #fefce8 0%, #fde68a 100%);
+    border-color: var(--accent);
+    border-width: 3px;
+    box-shadow: 0 2px 8px rgba(201, 169, 97, 0.3);
+  }
+  .lot-tile .num {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+  .lot-tile.locked .num { color: var(--text-muted); }
+  .lot-tile .pct {
+    font-size: 0.75rem;
+    margin-top: 3px;
+    color: var(--text-muted);
+  }
+  .lot-tile .you-tag {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    background: var(--accent);
+    color: var(--primary);
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-box {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 2px solid;
+  }
+  .legend-box.mine { background: #fde68a; border-color: var(--accent); }
+  .legend-box.locked { background: #e5e7eb; border-color: #9ca3af; }
+  .legend-box.partial { background: #ffe4b5; border-color: var(--warning); }
+  .legend-box.empty { background: white; border-color: var(--border); }
+  .info-banner {
+    background: var(--warning-light);
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    font-size: 0.92rem;
+  }
+  .spinner {
+    border: 3px solid #f3f4f6;
+    border-top: 3px solid var(--primary);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  @media (max-width: 600px) {
+    .hero { padding: 22px; }
+    .hero h2 { font-size: 1.3rem; }
+    .all-lots-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🏛 האזור האישי שלך · מתחם המייסדים</h1>
+  <div class="topbar-actions">
+    <span id="user-name" style="opacity:0.85;"></span>
+    <a href="https://hameyasdim.co.il">🏠 לאתר הראשי</a>
+    <button id="logout-btn">התנתק</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Hero -->
+  <div class="hero">
+    <h2 id="hero-title">טוען...</h2>
+    <div class="subtitle" id="hero-subtitle"></div>
+    <div class="hero-stats" id="hero-stats"></div>
+  </div>
+
+  <!-- אם אין שיבוץ -->
+  <div class="info-banner" id="no-alloc-banner" style="display:none;">
+    <strong>📋 עדיין לא בוצע שיבוץ עבורך.</strong><br>
+    הצוות שלנו עובד על שיבוץ מגרשים סחירים בתיאום איתך. ברגע שיהיו פרטים — תקבל עדכון.
+  </div>
+
+  <!-- השיבוצים שלי -->
+  <div class="section" id="my-allocs-section" style="display:none;">
+    <h3>🎯 השיבוץ שנקבע עבורך</h3>
+    <div class="my-allocs-grid" id="my-allocs-grid"></div>
+  </div>
+
+  <!-- כל המגרשים -->
+  <div class="section">
+    <h3>🗺 מצב כללי של המגרשים הסחירים</h3>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-box mine"></div>שובץ עבורך</div>
+      <div class="legend-item"><div class="legend-box locked"></div>נעול במלואו</div>
+      <div class="legend-item"><div class="legend-box partial"></div>חלקי</div>
+      <div class="legend-item"><div class="legend-box empty"></div>פנוי</div>
+    </div>
+    <div class="all-lots-grid" id="all-lots-grid">
+      <div style="grid-column:1/-1;text-align:center;padding:30px;">
+        <div class="spinner"></div>
+        <div style="margin-top:8px;color:#9ca3af;">טוען מגרשים...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- חלקות המקור שלי -->
+  <div class="section" id="parcels-section" style="display:none;">
+    <h3>🌾 חלקות המקור שלך</h3>
+    <div id="parcels-list"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase, requireAuth, logout } from './supabase-config.js';
+
+  const user = await requireAuth();
+  if (!user) throw new Error('Not authenticated');
+
+  // אדמין שמסתכל בדף הזה — נציע לו לחזור ללוח האדמין
+  if (user.profile.role === 'admin') {
+    if (confirm('זהו דף לבעלי קרקע. כאדמין — האם להפנות אותך ללוח האדמין?')) {
+      window.location.href = 'admin.html';
+    }
+  }
+
+  document.getElementById('user-name').textContent = '👤 ' + user.profile.full_name;
+  document.getElementById('logout-btn').addEventListener('click', logout);
+
+  // ===== נתוני 39 המגרשים =====
+  const LOTS = [
+    { id: 1,  use: 'מגורים ותעסוקה', units: 102, rentalUnits: 0,   employment: 12000, commerce: 770,  requiredIncomingArea: 8536  },
+    { id: 2,  use: 'מגורים ותעסוקה', units: 324, rentalUnits: 0,   employment: 12240, commerce: 1050, requiredIncomingArea: 22309 },
+    { id: 3,  use: 'מגורים ותעסוקה', units: 0,   rentalUnits: 264, employment: 9060,  commerce: 2370, requiredIncomingArea: 8195  },
+    { id: 4,  use: 'מגורים ותעסוקה', units: 96,  rentalUnits: 0,   employment: 10280, commerce: 1820, requiredIncomingArea: 3962  },
+    { id: 5,  use: 'מגורים ותעסוקה', units: 168, rentalUnits: 0,   employment: 9050,  commerce: 1890, requiredIncomingArea: 5856  },
+    { id: 6,  use: 'מגורים ד׳',       units: 0,   rentalUnits: 213, employment: 0,     commerce: 400,  requiredIncomingArea: 1891  },
+    { id: 7,  use: 'מגורים ד׳',       units: 0,   rentalUnits: 234, employment: 0,     commerce: 400,  requiredIncomingArea: 4591  },
+    { id: 8,  use: 'מגורים ד׳',       units: 180, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 10722 },
+    { id: 9,  use: 'מגורים ד׳',       units: 330, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 20518 },
+    { id: 10, use: 'מגורים ד׳',       units: 222, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 14239 },
+    { id: 11, use: 'מגורים ד׳',       units: 230, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 14300 },
+    { id: 12, use: 'מגורים ד׳',       units: 211, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 12463 },
+    { id: 13, use: 'מגורים ד׳',       units: 163, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 10668 },
+    { id: 14, use: 'מגורים ד׳',       units: 81,  rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 4935  },
+    { id: 15, use: 'מגורים ד׳',       units: 143, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 8438  },
+    { id: 16, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 12143 },
+    { id: 17, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 12782 },
+    { id: 18, use: 'מגורים ד׳',       units: 192, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 12931 },
+    { id: 19, use: 'מגורים ד׳',       units: 288, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 18729 },
+    { id: 20, use: 'מגורים ד׳',       units: 201, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 13838 },
+    { id: 21, use: 'מגורים ה׳',       units: 192, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 13232 },
+    { id: 22, use: 'מגורים ד׳',       units: 178, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 11690 },
+    { id: 23, use: 'מגורים ד׳',       units: 0,   rentalUnits: 188, employment: 0,     commerce: 400,  requiredIncomingArea: 3990  },
+    { id: 24, use: 'מגורים ד׳',       units: 176, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 12154 },
+    { id: 25, use: 'מגורים ד׳',       units: 0,   rentalUnits: 267, employment: 0,     commerce: 400,  requiredIncomingArea: 5996  },
+    { id: 26, use: 'מגורים ד׳',       units: 175, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 10843 },
+    { id: 27, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 11760 },
+    { id: 28, use: 'מגורים ד׳',       units: 186, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 11334 },
+    { id: 29, use: 'מגורים ד׳',       units: 207, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 12915 },
+    { id: 30, use: 'מגורים ד׳',       units: 201, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 13155 },
+    { id: 31, use: 'מגורים ד׳',       units: 135, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 8961  },
+    { id: 32, use: 'מגורים ד׳',       units: 138, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 9153  },
+    { id: 33, use: 'מגורים ד׳',       units: 202, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 12560 },
+    { id: 34, use: 'מגורים ד׳',       units: 204, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 12340 },
+    { id: 35, use: 'מגורים ד׳',       units: 199, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 11743 },
+    { id: 36, use: 'מגורים ד׳',       units: 219, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 13187 },
+    { id: 37, use: 'מגורים ד׳',       units: 250, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 17180 },
+    { id: 38, use: 'מגורים ד׳',       units: 224, rentalUnits: 0,   employment: 0,     commerce: 0,    requiredIncomingArea: 15086 },
+    { id: 40, use: 'מגורים ד׳',       units: 156, rentalUnits: 0,   employment: 0,     commerce: 400,  requiredIncomingArea: 10283 },
+  ];
+
+  const fmtSqm = n => n == null ? '-' : Math.round(n).toLocaleString('he-IL') + ' מ"ר';
+  const normalizeId = s => s ? String(s).trim().replace(/^0+/, '') : '';
+
+  // ===== טעינת נתוני המשתמש והמגרשים =====
+  async function loadData() {
+    const [parcelsRes, signedRes, signedAllocRes, dealsRes, dealAllocRes] = await Promise.all([
+      supabase.from('user_parcels').select('*').eq('user_id', user.profile.id),
+      supabase.from('signed_owners').select('*').eq('is_active', true),
+      supabase.from('signed_owner_lot_allocations').select('*'),
+      supabase.from('partnership_deals').select('*').eq('is_active', true),
+      supabase.from('deal_lot_allocations').select('*'),
+    ]);
+
+    const myParcels = parcelsRes.data || [];
+    const allSigned = signedRes.data || [];
+    const allSignedAlloc = signedAllocRes.data || [];
+    const allDeals = dealsRes.data || [];
+    const allDealAlloc = dealAllocRes.data || [];
+
+    // מציאת רשומות signed_owners של המשתמש לפי ת"ז
+    const myNormId = normalizeId(user.profile.id_number);
+    const mySignedRecords = myNormId
+      ? allSigned.filter(s => normalizeId(s.id_number) === myNormId)
+      : [];
+
+    // השיבוצים שלי במגרשים סחירים
+    const mySignedIds = new Set(mySignedRecords.map(s => s.id));
+    const myAllocations = allSignedAlloc.filter(a => mySignedIds.has(a.signed_owner_id));
+
+    // חישוב סטטוס מגרשים — בסיס לכל המגרשים
+    const allocByLot = {};
+    allSignedAlloc.forEach(a => {
+      if (!allocByLot[a.lot_id]) allocByLot[a.lot_id] = 0;
+      allocByLot[a.lot_id] += +a.allocated_area || 0;
+    });
+    allDealAlloc.forEach(a => {
+      if (!allocByLot[a.lot_id]) allocByLot[a.lot_id] = 0;
+      allocByLot[a.lot_id] += +a.allocated_area || 0;
+    });
+
+    const myLotIds = new Set(myAllocations.map(a => a.lot_id));
+
+    renderHero(myParcels, mySignedRecords, myAllocations);
+    renderMyAllocations(myAllocations);
+    renderAllLots(allocByLot, myLotIds);
+    renderMyParcels(mySignedRecords, myParcels);
+  }
+
+  function renderHero(parcels, signedRecs, myAllocs) {
+    const totalParcelArea = signedRecs.reduce((s, r) => s + (+r.agreement_area || 0), 0);
+    const totalAllocArea = myAllocs.reduce((s, a) => s + (+a.allocated_area || 0), 0);
+
+    document.getElementById('hero-title').textContent = `שלום ${user.profile.full_name} 👋`;
+
+    let subtitle = '';
+    if (signedRecs.length > 0) {
+      const parcelNums = [...new Set(signedRecs.map(r => `${r.gush}/${r.parcel}`))].join(' · ');
+      subtitle = `אתה רשום כבעל קרקע בחלקות: ${parcelNums}`;
+    } else if (parcels.length > 0) {
+      subtitle = 'הפרטים שלך עודם בעיבוד אצל הצוות';
+    } else {
+      subtitle = 'ברוך הבא לאזור האישי שלך';
+    }
+    document.getElementById('hero-subtitle').textContent = subtitle;
+
+    const stats = document.getElementById('hero-stats');
+    stats.innerHTML = `
+      <div class="hero-stat">
+        <div class="label">שטח קרקע שלך</div>
+        <div class="value">${totalParcelArea > 0 ? fmtSqm(totalParcelArea) : '-'}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">מגרשים ששובצו עבורך</div>
+        <div class="value">${myAllocs.length}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">סה"כ שטח שובץ</div>
+        <div class="value">${totalAllocArea > 0 ? fmtSqm(totalAllocArea) : '-'}</div>
+      </div>
+    `;
+  }
+
+  function renderMyAllocations(allocs) {
+    const banner = document.getElementById('no-alloc-banner');
+    const section = document.getElementById('my-allocs-section');
+    const grid = document.getElementById('my-allocs-grid');
+
+    if (allocs.length === 0) {
+      banner.style.display = 'block';
+      section.style.display = 'none';
+      return;
+    }
+
+    banner.style.display = 'none';
+    section.style.display = 'block';
+
+    grid.innerHTML = allocs.map(a => {
+      const lot = LOTS.find(L => L.id === a.lot_id);
+      if (!lot) return '';
+
+      const rights = [];
+      if (lot.units > 0)       rights.push(`🏠 ${lot.units} דירות בעלות`);
+      if (lot.rentalUnits > 0) rights.push(`🔑 ${lot.rentalUnits} יח"ד השכרה`);
+      if (lot.employment > 0)  rights.push(`🏢 ${lot.employment.toLocaleString('he-IL')} מ"ר תעסוקה`);
+      if (lot.commerce > 0)    rights.push(`🛍️ ${lot.commerce.toLocaleString('he-IL')} מ"ר מסחר`);
+
+      return `
+        <div class="my-alloc-card">
+          <div class="lot-num">מגרש ${lot.id}</div>
+          <div class="lot-use">${lot.use}</div>
+          <div class="alloc-area">${fmtSqm(a.allocated_area)}</div>
+          <div class="alloc-meta">
+            סוג: <strong>${a.allocation_type}</strong><br>
+            ${rights.map(r => `<div>${r}</div>`).join('')}
+            ${a.notes ? `<div style="margin-top:6px;font-style:italic;">📝 ${a.notes}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderAllLots(allocByLot, myLotIds) {
+    const grid = document.getElementById('all-lots-grid');
+    grid.innerHTML = LOTS.map(lot => {
+      const allocated = allocByLot[lot.id] || 0;
+      const required = lot.requiredIncomingArea;
+      const pct = required > 0 ? Math.min(100, (allocated / required) * 100) : 0;
+      const isMine = myLotIds.has(lot.id);
+
+      let statusClass = 'empty';
+      if (allocated >= required - 0.5) statusClass = 'locked';
+      else if (allocated > 0) statusClass = 'partial';
+      if (isMine) statusClass = 'mine';
+
+      const youTag = isMine ? '<div class="you-tag">אתה</div>' : '';
+      const pctText = allocated > 0 ? `${pct.toFixed(0)}%` : 'פנוי';
+
+      return `
+        <div class="lot-tile ${statusClass}" title="מגרש ${lot.id} — ${lot.use}">
+          ${youTag}
+          <div class="num">${lot.id}</div>
+          <div class="pct">${pctText}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderMyParcels(signedRecs, userParcels) {
+    const section = document.getElementById('parcels-section');
+    const list = document.getElementById('parcels-list');
+
+    if (signedRecs.length === 0 && userParcels.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = 'block';
+    const items = [];
+
+    signedRecs.forEach(s => {
+      items.push(`
+        <div style="background:#f9fafb;padding:12px 16px;border-radius:8px;margin-bottom:8px;">
+          <div style="font-weight:600;color:var(--primary);">גוש ${s.gush} · חלקה ${s.parcel}</div>
+          <div style="font-size:0.88rem;color:var(--text-muted);margin-top:4px;">
+            שטח: <strong>${fmtSqm(s.agreement_area || s.plan_area)}</strong>
+            ${s.action_type ? ` · פעולה: ${s.action_type}` : ''}
+            ${s.tabu_status ? ` · ${s.tabu_status}` : ''}
+          </div>
+        </div>
+      `);
+    });
+
+    list.innerHTML = items.join('') || '<div class="empty-state">אין נתוני חלקה</div>';
+  }
+
+  // ===== טעינה ראשונית =====
+  await loadData();
+</script>
+
+</body>
+</html>

@@ -869,6 +869,13 @@
   const user = await requireAuth();
   if (!user) throw new Error('not authenticated');
 
+  // אם המשתמש אינו אדמין — להפנות לאזור האישי (צפייה בלבד).
+  // הסימולטור משמש כעת ככלי אדמין בלבד.
+  if (user.profile.role !== 'admin') {
+    window.location.href = 'client-portal.html';
+    throw new Error('redirecting to client portal');
+  }
+
   // חשיפת המשתמש לסקריפט הראשי
   window.__currentUser = user;
 
