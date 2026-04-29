@@ -1331,6 +1331,7 @@
   let allDealAllocations = []; // כל ההקצאות מ-deal_lot_allocations
   let allSignedOwners = [];    // כל הבעלים החתומים מ-signed_owners
   let allSignedAllocations = []; // הקצאות אדמין מ-signed_owner_lot_allocations
+  let allFamilies = [];        // קבוצות משפחה מ-family_groups
   // allocationsByLot: lot_id -> [{source, owner_name, area, ...}]
   let allocationsByLot = {};
 
@@ -1353,13 +1354,15 @@
     const grid = document.getElementById('lots-grid');
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;"><div class="spinner"></div><div style="margin-top:8px;">טוען...</div></div>`;
 
-    const [dealsRes, dealAllocRes, selsRes, signedRes, signedAllocRes] = await Promise.all([
+    const [dealsRes, dealAllocRes, selsRes, signedRes, signedAllocRes, famRes] = await Promise.all([
       supabase.from('partnership_deals').select('*').eq('is_active', true).order('deal_number'),
       supabase.from('deal_lot_allocations').select('*'),
       supabase.from('selections').select('*').eq('is_current', true),
       supabase.from('signed_owners').select('*').eq('is_active', true).order('owner_name'),
       supabase.from('signed_owner_lot_allocations').select('*'),
+      supabase.from('family_groups').select('*').eq('is_active', true).order('family_name'),
     ]);
+    allFamilies = famRes.data || [];
 
     if (dealsRes.error) {
       grid.innerHTML = `<div style="grid-column:1/-1;color:#dc2626;text-align:center;padding:30px;">שגיאה: ${dealsRes.error.message}</div>`;
@@ -1398,22 +1401,66 @@
       });
     });
 
-    // 2) הקצאות מ-signed_owner_lot_allocations (חתומים מקור — שיבוץ ידני של אדמין)
+    // 2) הקצאות מ-signed_owner_lot_allocations
+    // מפצלים: הקצאות עם family_allocation_id מקובצות יחד; אחרות מוצגות בנפרד
+    const familyAllocsByKey = {}; // "lotId:familyAllocId" → אגרגציה
     allSignedAllocations.forEach(a => {
       const owner = allSignedOwners.find(o => o.id === a.signed_owner_id);
       if (!owner) return;
-      if (!allocationsByLot[a.lot_id]) allocationsByLot[a.lot_id] = [];
-      allocationsByLot[a.lot_id].push({
-        source: 'signed-admin',
-        source_label: 'חתום מקור (שיבוץ אדמין)',
-        owner_name: owner.owner_name,
-        owner_id: owner.id_number || '',
-        owner_parcel: owner.parcel,
-        area: +a.allocated_area || 0,
-        allocation_id: a.id,
-        signed_owner_id: owner.id,
-        allocation_type: a.allocation_type,
-      });
+
+      if (a.family_allocation_id) {
+        // קיבוץ הקצאות משפחתיות
+        const key = `${a.lot_id}:${a.family_allocation_id}`;
+        if (!familyAllocsByKey[key]) {
+          const fg = allFamilies.find(f => f.id === owner.family_group_id);
+          familyAllocsByKey[key] = {
+            source: 'family',
+            source_label: fg ? `משפחה: ${fg.family_name}` : 'משפחה',
+            family_name: fg ? fg.family_name : 'משפחה',
+            family_id: owner.family_group_id,
+            lot_id: a.lot_id,
+            family_allocation_id: a.family_allocation_id,
+            allocation_id: `fam:${a.family_allocation_id}`, // מזהה לכפתור מחיקה
+            area: 0,
+            member_count: 0,
+            members_breakdown: [],
+            allocation_type: a.allocation_type,
+          };
+        }
+        familyAllocsByKey[key].area += +a.allocated_area || 0;
+        familyAllocsByKey[key].member_count += 1;
+        familyAllocsByKey[key].members_breakdown.push({
+          name: owner.owner_name,
+          parcel: owner.parcel,
+          area: +a.allocated_area || 0,
+        });
+      } else {
+        // הקצאת אדמין רגילה (חתום בודד)
+        if (!allocationsByLot[a.lot_id]) allocationsByLot[a.lot_id] = [];
+        allocationsByLot[a.lot_id].push({
+          source: 'signed-admin',
+          source_label: 'חתום מקור (שיבוץ אדמין)',
+          owner_name: owner.owner_name,
+          owner_id: owner.id_number || '',
+          owner_parcel: owner.parcel,
+          area: +a.allocated_area || 0,
+          allocation_id: a.id,
+          signed_owner_id: owner.id,
+          allocation_type: a.allocation_type,
+        });
+      }
+    });
+
+    // הוספת הקצאות משפחתיות מקובצות לרשימה
+    Object.values(familyAllocsByKey).forEach(fa => {
+      const lotId = fa.lot_id;
+      if (!allocationsByLot[lotId]) allocationsByLot[lotId] = [];
+      // ממיינים את הפירוט
+      fa.members_breakdown.sort((a, b) => b.area - a.area);
+      // התאמה לשדות הסטנדרטיים של הצגה:
+      fa.owner_name = `${fa.family_name} (${fa.member_count} חברים)`;
+      fa.owner_id = '';
+      allocationsByLot[lotId].push(fa);
     });
 
     // 3) הקצאות מ-deal_lot_allocations (נדלן נדלן / דודי יצחקי)
@@ -1501,15 +1548,24 @@
         : l.allocs.map(a => {
             const badge = a.source === 'signed-self'  ? `<span class="alloc-source-badge alloc-source-signed">🔵 חתום (לקוח)</span>`
                        :  a.source === 'signed-admin' ? `<span class="alloc-source-badge alloc-source-signed">🔵 חתום (אדמין)</span>`
+                       :  a.source === 'family'       ? `<span class="alloc-source-badge" style="background:#fce7f3;color:#9f1239;">👨‍👩‍👧 משפחה</span>`
                        :  a.source === 'nadlan'       ? `<span class="alloc-source-badge alloc-source-nadlan">🏢 נדלן נדלן</span>`
                        :                                 `<span class="alloc-source-badge alloc-source-yitzhaki">👤 דודי יצחקי</span>`;
-            // מחיקה לכל סוג הקצאה — לפי המקור
             const delType = a.source === 'signed-admin' ? 'del-signed'
                           : a.source === 'signed-self'  ? 'del-self'
+                          : a.source === 'family'       ? 'del-family'
                           :                                'del-deal';
             const delBtn = a.allocation_id ? `<button class="btn-sm btn-reject" data-action="${delType}" data-id="${a.allocation_id}" style="padding:1px 6px;font-size:0.7rem;margin-right:4px;" title="מחק הקצאה">✗</button>` : '';
             const parcelHint = a.owner_parcel ? ` <span style="color:var(--text-muted);font-size:0.75rem;">(חלקה ${a.owner_parcel})</span>` : '';
-            return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${parcelHint}${delBtn}</span><span>${fmtSqm(a.area)}</span></div>`;
+            // לקבוצת משפחה — שורת פירוט נפתחת
+            let familyDetail = '';
+            if (a.source === 'family' && a.members_breakdown) {
+              const breakdown = a.members_breakdown.map(b =>
+                `<div style="font-size:0.75rem;color:var(--text-muted);">• ${b.name} (חלקה ${b.parcel}): ${fmtSqm(b.area)}</div>`
+              ).join('');
+              familyDetail = `<details style="margin-top:4px;"><summary style="cursor:pointer;font-size:0.78rem;color:var(--primary);">פירוט חברים (${a.member_count})</summary>${breakdown}</details>`;
+            }
+            return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${parcelHint}${delBtn}${familyDetail}</span><span>${fmtSqm(a.area)}</span></div>`;
           }).join('');
 
       // תגי זכויות בנייה (חיווי ויזואלי)
@@ -1554,6 +1610,23 @@
     document.querySelectorAll('[data-action="del-self"]').forEach(btn => {
       btn.addEventListener('click', () => deleteSelfSelection(btn.dataset.id));
     });
+    document.querySelectorAll('[data-action="del-family"]').forEach(btn => {
+      btn.addEventListener('click', () => deleteFamilyAllocation(btn.dataset.id));
+    });
+  }
+
+  // ===== מחיקת הקצאה משפחתית מקובצת =====
+  async function deleteFamilyAllocation(compoundId) {
+    // compoundId = "fam:<familyAllocationId>"
+    const parts = compoundId.split(':');
+    if (parts.length !== 2 || parts[0] !== 'fam') { alert('מזהה לא תקין'); return; }
+    const famAllocId = parts[1];
+    if (!confirm('למחוק את כל הקצאת המשפחה? פעולה זו תסיר את כל ההקצאות הפרטניות שנוצרו ביחד.')) return;
+    const { error } = await supabase.from('signed_owner_lot_allocations')
+      .delete()
+      .eq('family_allocation_id', famAllocId);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    await loadAllocations();
   }
 
   // ===== מחיקת בחירה עצמית של לקוח (selections.selected_lots) =====
@@ -1619,10 +1692,19 @@
       <div class="modal-section-title">מקור ההקצאה</div>
       <select id="alloc-source" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
         <option value="">בחר מקור...</option>
-        <option value="signed">🔵 חתום הסכם מקור</option>
+        <option value="family">👨‍👩‍👧 קבוצת משפחה (פרופורציונלי)</option>
+        <option value="signed">🔵 חתום הסכם מקור (בודד)</option>
         <option value="nadlan">🏢 נדלן נדלן</option>
         <option value="yitzhaki">👤 דודי יצחקי</option>
       </select>
+
+      <div id="alloc-family-section" style="display:none;margin-top:10px;">
+        <div class="modal-section-title">בחר קבוצת משפחה</div>
+        <select id="alloc-family" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+          <option value="">בחר קבוצה...</option>
+        </select>
+        <div id="alloc-family-info" style="font-size:0.85rem;color:var(--text-muted);margin-top:6px;"></div>
+      </div>
 
       <div id="alloc-deal-section" style="display:none;margin-top:10px;">
         <div class="modal-section-title">בחר עסקה</div>
@@ -1672,10 +1754,15 @@
     const signedInfo = document.getElementById('alloc-signed-info');
     const signedIdHidden = document.getElementById('alloc-signed-id');
 
+    const familySection = document.getElementById('alloc-family-section');
+    const familySel = document.getElementById('alloc-family');
+    const familyInfo = document.getElementById('alloc-family-info');
+
     sourceSel.addEventListener('change', () => {
       const v = sourceSel.value;
       dealSection.style.display = 'none';
       signedSection.style.display = 'none';
+      familySection.style.display = 'none';
       if (v === 'nadlan' || v === 'yitzhaki') {
         const cat = v === 'nadlan' ? 'נדלן נדלן' : 'דודי יצחקי';
         const deals = availableDeals.filter(d => d.category === cat);
@@ -1690,7 +1777,40 @@
         signedList.style.display = 'none';
         signedInfo.textContent = '';
         signedIdHidden.value = '';
+      } else if (v === 'family') {
+        // מציג רק משפחות עם נותר זמין לשיבוץ
+        const familiesWithStats = allFamilies.map(fg => {
+          const members = allSignedOwners.filter(s => s.family_group_id === fg.id);
+          const memberIds = new Set(members.map(m => m.id));
+          const totalArea = members.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
+          const allocatedArea = allSignedAllocations
+            .filter(a => memberIds.has(a.signed_owner_id))
+            .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
+          return { ...fg, memberCount: members.length, totalArea, allocatedArea, remaining: totalArea - allocatedArea };
+        }).filter(f => f.memberCount > 0 && f.remaining > 0.5);
+
+        familySel.innerHTML = '<option value="">בחר קבוצה...</option>' + familiesWithStats.map(f =>
+          `<option value="${f.id}">${f.family_name} · ${f.memberCount} חברים · נותר ${f.remaining.toFixed(0)} מ"ר</option>`
+        ).join('');
+        familySection.style.display = 'block';
+        familyInfo.textContent = '';
+        if (familiesWithStats.length === 0) {
+          familyInfo.innerHTML = '<span style="color:var(--warning);">אין קבוצות משפחה זמינות. צור קבוצה ב-"👨‍👩‍👧 קבוצות משפחה" וצרף חברים.</span>';
+        }
       }
+    });
+
+    familySel.addEventListener('change', () => {
+      const fg = allFamilies.find(f => f.id === familySel.value);
+      if (!fg) { familyInfo.textContent = ''; return; }
+      const members = allSignedOwners.filter(s => s.family_group_id === fg.id);
+      const memberIds = new Set(members.map(m => m.id));
+      const totalArea = members.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
+      const allocatedArea = allSignedAllocations
+        .filter(a => memberIds.has(a.signed_owner_id))
+        .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
+      const remaining = totalArea - allocatedArea;
+      familyInfo.innerHTML = `<strong>${members.length} חברים</strong> · סה"כ זכאות: ${totalArea.toFixed(0)} מ"ר · הוקצה: ${allocatedArea.toFixed(0)} · <strong style="color:var(--success);">נותר: ${remaining.toFixed(0)}</strong>`;
     });
 
     dealSel.addEventListener('change', () => {
@@ -1801,6 +1921,53 @@
       if (!confirm(`השטח שהוזן (${area} מ"ר) גדול מהנותר במגרש (${lotRemaining.toFixed(2)} מ"ר). להמשיך בכל זאת?`)) return;
     }
 
+    // === הקצאה מקבוצת משפחה (פיזור פרופורציונלי) ===
+    if (source === 'family') {
+      const familyId = document.getElementById('alloc-family').value;
+      if (!familyId) { alert('יש לבחור קבוצת משפחה'); return; }
+
+      const family = allFamilies.find(f => f.id === familyId);
+      const members = allSignedOwners.filter(s => s.family_group_id === familyId);
+      if (members.length === 0) { alert('אין חברים בקבוצה'); return; }
+
+      // חישוב שטח נותר לכל חבר (זכאות מינוס מה שכבר הוקצה)
+      const memberStats = members.map(m => {
+        const used = allSignedAllocations
+          .filter(a => a.signed_owner_id === m.id)
+          .reduce((s, a) => s + (+a.allocated_area || 0), 0);
+        const total = +m.agreement_area || 0;
+        return { member: m, available: Math.max(0, total - used) };
+      }).filter(x => x.available > 0);
+
+      const totalAvailable = memberStats.reduce((s, x) => s + x.available, 0);
+      if (totalAvailable < area - 0.5) {
+        if (!confirm(`השטח המבוקש (${area} מ"ר) גדול מהנותר בקבוצה (${totalAvailable.toFixed(2)} מ"ר). להמשיך בכל זאת? (הפיזור יחרוג)`)) return;
+      }
+
+      // יצירת UUID משותף לכל ההקצאה הקולקטיבית
+      const familyAllocId = crypto.randomUUID();
+
+      // פיזור פרופורציונלי: כל חבר מקבל (available_שלו / total_available) * area
+      const rows = memberStats.map(({ member, available }) => {
+        const proportion = available / totalAvailable;
+        const memberArea = area * proportion;
+        return {
+          signed_owner_id: member.id,
+          lot_id: lotId,
+          allocation_type: allocType,
+          allocated_area: Math.round(memberArea * 100) / 100,
+          notes: notes ? `${notes} | חלק מ-${family.family_name}` : `חלק מ-${family.family_name}`,
+          family_allocation_id: familyAllocId,
+        };
+      });
+
+      const { error } = await supabase.from('signed_owner_lot_allocations').insert(rows);
+      if (error) { alert('שגיאה: ' + error.message); return; }
+      closeAllocModal();
+      await loadAllocations();
+      return;
+    }
+
     // === הקצאה מבעלים חתום מקור (אדמין משבץ) ===
     if (source === 'signed') {
       const signedOwnerId = document.getElementById('alloc-signed-id').value;
@@ -1876,7 +2043,7 @@
   // ============================================================
   // ===== טאב 3: ניהול קבוצות משפחה =====
   // ============================================================
-  let allFamilies = [];          // רשימת המשפחות
+  // (allFamilies מוגדר למעלה במצב המשותף)
 
   // טעינה — נשמע גם מטאב המגרשים (משותף)
   async function loadFamilies() {
