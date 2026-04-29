@@ -1335,7 +1335,7 @@
       const userInfo = allUsers.find(u => u.id === sel.user_id);
       const ownerName = userInfo?.full_name || 'משתמש לא ידוע';
       const ownerId = userInfo?.id_number || '';
-      lots.forEach(l => {
+      lots.forEach((l, lotIdx) => {
         const lotId = +l.lot_id;
         if (!allocationsByLot[lotId]) allocationsByLot[lotId] = [];
         allocationsByLot[lotId].push({
@@ -1344,7 +1344,10 @@
           owner_name: ownerName,
           owner_id: ownerId,
           area: +l.allocated_area || 0,
-          allocation_id: null,  // לא ניתן למחוק מטאב זה (זו בחירת הלקוח)
+          // אדמין יכול לבטל בחירה של לקוח: שומר selection_id + lot_index לזיהוי השורה הספציפית
+          allocation_id: `sel:${sel.id}:${lotIdx}`,
+          selection_id: sel.id,
+          lot_index: lotIdx,
           deal_id: null,
         });
       });
@@ -1455,9 +1458,11 @@
                        :  a.source === 'signed-admin' ? `<span class="alloc-source-badge alloc-source-signed">🔵 חתום (אדמין)</span>`
                        :  a.source === 'nadlan'       ? `<span class="alloc-source-badge alloc-source-nadlan">🏢 נדלן נדלן</span>`
                        :                                 `<span class="alloc-source-badge alloc-source-yitzhaki">👤 דודי יצחקי</span>`;
-            // מחיקה אפשרית רק להקצאות שאדמין יצר (deal או signed-admin)
-            const delType = a.source === 'signed-admin' ? 'del-signed' : 'del-deal';
-            const delBtn = a.allocation_id ? `<button class="btn-sm btn-reject" data-action="${delType}" data-id="${a.allocation_id}" style="padding:1px 6px;font-size:0.7rem;margin-right:4px;">✗</button>` : '';
+            // מחיקה לכל סוג הקצאה — לפי המקור
+            const delType = a.source === 'signed-admin' ? 'del-signed'
+                          : a.source === 'signed-self'  ? 'del-self'
+                          :                                'del-deal';
+            const delBtn = a.allocation_id ? `<button class="btn-sm btn-reject" data-action="${delType}" data-id="${a.allocation_id}" style="padding:1px 6px;font-size:0.7rem;margin-right:4px;" title="מחק הקצאה">✗</button>` : '';
             const parcelHint = a.owner_parcel ? ` <span style="color:var(--text-muted);font-size:0.75rem;">(חלקה ${a.owner_parcel})</span>` : '';
             return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${parcelHint}${delBtn}</span><span>${fmtSqm(a.area)}</span></div>`;
           }).join('');
@@ -1501,6 +1506,39 @@
     document.querySelectorAll('[data-action="del-signed"]').forEach(btn => {
       btn.addEventListener('click', () => deleteSignedAllocation(btn.dataset.id));
     });
+    document.querySelectorAll('[data-action="del-self"]').forEach(btn => {
+      btn.addEventListener('click', () => deleteSelfSelection(btn.dataset.id));
+    });
+  }
+
+  // ===== מחיקת בחירה עצמית של לקוח (selections.selected_lots) =====
+  async function deleteSelfSelection(compoundId) {
+    // compoundId = "sel:<selectionId>:<lotIndex>"
+    const parts = compoundId.split(':');
+    if (parts.length !== 3 || parts[0] !== 'sel') { alert('מזהה לא תקין'); return; }
+    const selectionId = parts[1];
+    const lotIdx = +parts[2];
+
+    const sel = (await supabase.from('selections').select('*').eq('id', selectionId).single()).data;
+    if (!sel) { alert('הבחירה לא נמצאה'); return; }
+    const lots = Array.isArray(sel.selected_lots) ? [...sel.selected_lots] : [];
+    if (lotIdx >= lots.length) { alert('שורה לא קיימת'); return; }
+    const removedLot = lots[lotIdx];
+    const ownerName = (allUsers.find(u => u.id === sel.user_id)?.full_name) || 'הלקוח';
+
+    if (!confirm(`למחוק את הבחירה של ${ownerName} במגרש ${removedLot.lot_id} (${Math.round(removedLot.allocated_area)} מ"ר)?`)) return;
+
+    lots.splice(lotIdx, 1);
+
+    // אם נשארו מגרשים — מעדכנים את הרשומה. אם לא — מוחקים את הרשומה כולה.
+    if (lots.length === 0) {
+      const { error } = await supabase.from('selections').delete().eq('id', selectionId);
+      if (error) { alert('שגיאה: ' + error.message); return; }
+    } else {
+      const { error } = await supabase.from('selections').update({ selected_lots: lots }).eq('id', selectionId);
+      if (error) { alert('שגיאה: ' + error.message); return; }
+    }
+    await loadAllocations();
   }
 
   // ===== מודאל הוספת הקצאה =====
