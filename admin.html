@@ -557,6 +557,7 @@
 <nav class="tabs-nav">
   <button class="tab-btn active" data-tab="users">👥 ניהול משתמשים</button>
   <button class="tab-btn" data-tab="allocations">🎯 שיבוץ מגרשים</button>
+  <button class="tab-btn" data-tab="families">👨‍👩‍👧 קבוצות משפחה</button>
 </nav>
 
 <!-- ============================================================ -->
@@ -703,6 +704,50 @@
   </div>
 </div>
 </div><!-- /tab-allocations -->
+
+<!-- ============================================================ -->
+<!-- טאב 3: קבוצות משפחה                                            -->
+<!-- ============================================================ -->
+<div class="tab-content" id="tab-families">
+<div class="container">
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">סה"כ קבוצות משפחה</div>
+      <div class="value" id="stat-fam-total">-</div>
+    </div>
+    <div class="stat-card info">
+      <div class="label">סה"כ חברים בקבוצות</div>
+      <div class="value" id="stat-fam-members">-</div>
+    </div>
+    <div class="stat-card gold">
+      <div class="label">סה"כ שטח בקבוצות</div>
+      <div class="value" id="stat-fam-area" style="font-size:1.2rem;">-</div>
+    </div>
+    <div class="stat-card approved">
+      <div class="label">בעלים פעילים שלא בקבוצה</div>
+      <div class="value" id="stat-fam-orphan">-</div>
+    </div>
+  </div>
+
+  <div class="filters-bar">
+    <input type="text" id="family-search" placeholder="🔍 חיפוש קבוצה לפי שם...">
+    <button id="add-family-btn" class="btn-export">➕ צור קבוצת משפחה חדשה</button>
+    <button id="fam-refresh-btn" class="btn-sm btn-view">🔄 רענן</button>
+  </div>
+
+  <div id="families-list">
+    <div style="text-align:center;padding:40px;">
+      <div class="spinner"></div>
+      <div style="margin-top:8px;color:#9ca3af;">טוען קבוצות משפחה...</div>
+    </div>
+  </div>
+</div>
+</div><!-- /tab-families -->
+
+<!-- מודאל ניהול קבוצת משפחה -->
+<div class="modal-overlay" id="family-modal">
+  <div class="modal" id="family-modal-content"></div>
+</div>
 
 <!-- מודאל פרטי משתמש -->
 <div class="modal-overlay" id="user-modal">
@@ -1589,9 +1634,10 @@
 
       <div id="alloc-signed-section" style="display:none;margin-top:10px;">
         <div class="modal-section-title">בחר בעלים חתום (חיפוש לפי שם / ת.ז. / חלקה)</div>
-        <input type="text" id="alloc-signed-search" placeholder="התחל להקליד..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+        <input type="text" id="alloc-signed-search" placeholder="התחל להקליד שם או ת.ז. ובחר מהרשימה..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
         <div id="alloc-signed-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:6px;display:none;"></div>
         <div id="alloc-signed-info" style="font-size:0.83rem;color:var(--text-muted);margin-top:6px;"></div>
+        <div id="alloc-signed-status" style="font-size:0.85rem;font-weight:600;margin-top:6px;"></div>
         <input type="hidden" id="alloc-signed-id">
       </div>
 
@@ -1653,21 +1699,53 @@
       dealInfo.textContent = `סטטוס: ${deal.status} · סה"כ עסקה: ${(+deal.area_sqm).toFixed(2)} מ"ר · הוקצה: ${deal.used_area.toFixed(2)} · נותר: ${deal.remaining_area.toFixed(2)}`;
     });
 
-    // חיפוש בעלים חתום (signed_owners)
+    const signedStatus = document.getElementById('alloc-signed-status');
+
+    // עזר: מילוי פרטי בעלים שנבחר
+    function selectSignedOwner(owner) {
+      signedIdHidden.value = owner.id;
+      signedSearch.value = `${owner.owner_name} · ת.ז. ${owner.id_number || '-'} · חלקה ${owner.parcel}`;
+      signedList.style.display = 'none';
+      const usedArea = allSignedAllocations.filter(a => a.signed_owner_id === owner.id)
+        .reduce((s, a) => s + (+a.allocated_area || 0), 0);
+      const totalArea = +owner.agreement_area || +owner.unification_area || 0;
+      const rem = totalArea - usedArea;
+      signedInfo.textContent = `סה"כ זכאות: ${totalArea.toFixed(0)} מ"ר · הוקצה כבר: ${usedArea.toFixed(0)} · נותר: ${rem.toFixed(0)}`;
+      signedStatus.innerHTML = `<span style="color:var(--success);">✓ נבחר: ${owner.owner_name}</span>`;
+    }
+
+    // חיפוש בעלים חתום (signed_owners) — מסנן רשומות שכבר נבחרו (חיפוש על שם/ת.ז./חלקה בלבד)
     signedSearch.addEventListener('input', () => {
-      const q = signedSearch.value.trim().toLowerCase();
+      // אם המשתמש שינה את הטקסט אחרי בחירה — מנקים את ה-ID הנסתר
+      if (signedIdHidden.value) {
+        signedIdHidden.value = '';
+        signedStatus.innerHTML = '';
+      }
+      const raw = signedSearch.value.trim();
+      // אם הטקסט מכיל את הפורמט שלנו (· ת.ז. · חלקה) — נחלץ את הת.ז. ונחפש לפיו
+      let q = raw.toLowerCase();
+      const fmtMatch = raw.match(/ת\.ז\.\s+(\d+)/);
+      if (fmtMatch) {
+        q = fmtMatch[1].toLowerCase();
+      }
       if (q.length < 1) { signedList.style.display = 'none'; return; }
+
       const matches = allSignedOwners.filter(o => {
         const name = (o.owner_name || '').toLowerCase();
-        const id = (o.id_number || '').toLowerCase();
+        const idStr = String(o.id_number || '').toLowerCase();
+        const idNoZero = idStr.replace(/^0+/, '');
+        const qNoZero = q.replace(/^0+/, '');
         const parcel = String(o.parcel || '');
-        return name.includes(q) || id.includes(q) || parcel.includes(q);
+        return name.includes(q) ||
+               idStr.includes(q) ||
+               idNoZero === qNoZero ||
+               parcel === q;
       }).slice(0, 50);
+
       if (matches.length === 0) {
         signedList.innerHTML = `<div style="padding:10px;color:var(--text-muted);">לא נמצאו תוצאות</div>`;
       } else {
         signedList.innerHTML = matches.map(o => {
-          // חישוב כמה כבר הוקצה לבעלים זה
           const usedArea = allSignedAllocations.filter(a => a.signed_owner_id === o.id)
             .reduce((s, a) => s + (+a.allocated_area || 0), 0);
           const totalArea = +o.agreement_area || +o.unification_area || 0;
@@ -1677,6 +1755,12 @@
             <div style="font-size:0.78rem;color:var(--text-muted);">סה"כ זכאות: ${totalArea.toFixed(0)} מ"ר · הוקצה כבר: ${usedArea.toFixed(0)} · נותר: ${rem.toFixed(0)}</div>
           </div>`;
         }).join('');
+
+        // אם יש בדיוק התאמה אחת — בחירה אוטומטית
+        if (matches.length === 1) {
+          selectSignedOwner(matches[0]);
+          signedList.innerHTML = `<div style="padding:8px 10px;color:var(--success);font-size:0.85rem;">✓ זוהתה התאמה ייחודית — ${matches[0].owner_name} (חלקה ${matches[0].parcel})</div>`;
+        }
       }
       signedList.style.display = 'block';
     });
@@ -1688,14 +1772,7 @@
       const ownerId = item.dataset.id;
       const owner = allSignedOwners.find(o => o.id === ownerId);
       if (!owner) return;
-      signedIdHidden.value = ownerId;
-      signedSearch.value = `${owner.owner_name} · ת.ז. ${owner.id_number || '-'} · חלקה ${owner.parcel}`;
-      signedList.style.display = 'none';
-      const usedArea = allSignedAllocations.filter(a => a.signed_owner_id === ownerId)
-        .reduce((s, a) => s + (+a.allocated_area || 0), 0);
-      const totalArea = +owner.agreement_area || +owner.unification_area || 0;
-      const rem = totalArea - usedArea;
-      signedInfo.textContent = `נבחר. סה"כ זכאות: ${totalArea.toFixed(0)} מ"ר · הוקצה כבר: ${usedArea.toFixed(0)} · נותר: ${rem.toFixed(0)}`;
+      selectSignedOwner(owner);
     });
 
     document.getElementById('alloc-close-btn').addEventListener('click', closeAllocModal);
@@ -1795,6 +1872,248 @@
   document.getElementById('lot-status-filter').addEventListener('change', renderLots);
   document.getElementById('lot-sort').addEventListener('change', renderLots);
   document.getElementById('alloc-refresh-btn').addEventListener('click', loadAllocations);
+
+  // ============================================================
+  // ===== טאב 3: ניהול קבוצות משפחה =====
+  // ============================================================
+  let allFamilies = [];          // רשימת המשפחות
+
+  // טעינה — נשמע גם מטאב המגרשים (משותף)
+  async function loadFamilies() {
+    const list = document.getElementById('families-list');
+    list.innerHTML = `<div style="text-align:center;padding:30px;"><div class="spinner"></div></div>`;
+
+    const [famRes, signedRes, allocRes] = await Promise.all([
+      supabase.from('family_groups').select('*').eq('is_active', true).order('family_name'),
+      supabase.from('signed_owners').select('*').eq('is_active', true),
+      supabase.from('signed_owner_lot_allocations').select('signed_owner_id, allocated_area'),
+    ]);
+
+    if (famRes.error) {
+      list.innerHTML = `<div style="color:#dc2626;text-align:center;padding:30px;">שגיאה: ${famRes.error.message}</div>`;
+      return;
+    }
+
+    allFamilies = famRes.data || [];
+    allSignedOwners = signedRes.data || [];
+    const allocs = allocRes.data || [];
+
+    // חישוב לכל משפחה: חברים, שטח כולל, הוקצה
+    const families = allFamilies.map(fg => {
+      const members = allSignedOwners.filter(s => s.family_group_id === fg.id);
+      const memberIds = new Set(members.map(m => m.id));
+      const totalArea = members.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
+      const allocatedArea = allocs
+        .filter(a => memberIds.has(a.signed_owner_id))
+        .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
+      return { ...fg, members, totalArea, allocatedArea, remaining: totalArea - allocatedArea };
+    });
+
+    // סטטיסטיקה
+    document.getElementById('stat-fam-total').textContent = families.length;
+    document.getElementById('stat-fam-members').textContent = families.reduce((s, f) => s + f.members.length, 0);
+    const totalFamArea = families.reduce((s, f) => s + f.totalArea, 0);
+    document.getElementById('stat-fam-area').textContent = totalFamArea > 0 ? fmtSqm(totalFamArea) : '-';
+    const orphanCount = allSignedOwners.filter(s => !s.family_group_id).length;
+    document.getElementById('stat-fam-orphan').textContent = orphanCount;
+
+    renderFamilies(families);
+  }
+
+  function renderFamilies(families) {
+    const search = document.getElementById('family-search').value.trim().toLowerCase();
+    let filtered = families;
+    if (search) {
+      filtered = filtered.filter(f => (f.family_name || '').toLowerCase().includes(search));
+    }
+
+    if (filtered.length === 0) {
+      document.getElementById('families-list').innerHTML = `
+        <div style="text-align:center;padding:40px;color:#9ca3af;">
+          ${families.length === 0 ? 'עדיין לא נוצרו קבוצות משפחה. לחץ על "➕ צור קבוצה חדשה" כדי להתחיל.' : 'אין קבוצות תואמות לחיפוש'}
+        </div>
+      `;
+      return;
+    }
+
+    document.getElementById('families-list').innerHTML = filtered.map(f => {
+      const pct = f.totalArea > 0 ? (f.allocatedArea / f.totalArea) * 100 : 0;
+      const parcelList = [...new Set(f.members.map(m => m.parcel))].sort((a,b) => a-b).join(', ');
+      const membersPreview = f.members.slice(0, 5).map(m => m.owner_name).join(' · ');
+      const moreCount = f.members.length > 5 ? ` ועוד ${f.members.length - 5}` : '';
+
+      return `
+        <div class="lot-card" style="margin-bottom:14px;">
+          <div class="lot-card-header">
+            <div>
+              <div class="lot-card-title">👨‍👩‍👧 ${f.family_name}</div>
+              <div class="lot-card-use">${f.members.length} חברים · בחלקות ${parcelList || '—'}</div>
+            </div>
+            <button class="btn-sm btn-view" data-action="manage-fam" data-id="${f.id}">⚙ ניהול</button>
+          </div>
+          <div class="lot-progress"><div class="lot-progress-fill" style="width:${pct}%"></div></div>
+          <div class="lot-stats">
+            <div class="lot-stat"><div class="lot-stat-label">סה"כ שטח</div><div class="lot-stat-value">${fmtSqm(f.totalArea)}</div></div>
+            <div class="lot-stat"><div class="lot-stat-label">הוקצה</div><div class="lot-stat-value" style="color:var(--success);">${fmtSqm(f.allocatedArea)}</div></div>
+            <div class="lot-stat"><div class="lot-stat-label">נותר</div><div class="lot-stat-value" style="color:${f.remaining > 0 ? 'var(--warning)' : 'var(--success)'};">${f.remaining > 0 ? fmtSqm(f.remaining) : '✓'}</div></div>
+          </div>
+          ${membersPreview ? `<div style="margin-top:10px;font-size:0.83rem;color:var(--text-muted);">${membersPreview}${moreCount}</div>` : ''}
+          ${f.notes ? `<div style="margin-top:8px;font-size:0.82rem;color:var(--text-muted);font-style:italic;">📝 ${f.notes}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    document.querySelectorAll('[data-action="manage-fam"]').forEach(btn => {
+      btn.addEventListener('click', () => openFamilyModal(btn.dataset.id));
+    });
+  }
+
+  // ===== מודאל יצירה / ניהול קבוצת משפחה =====
+  function openFamilyModal(familyId = null) {
+    const isNew = !familyId;
+    const family = isNew ? null : allFamilies.find(f => f.id === familyId);
+    const members = isNew ? [] : allSignedOwners.filter(s => s.family_group_id === familyId);
+
+    document.getElementById('family-modal-content').innerHTML = `
+      <h2>${isNew ? '➕ יצירת קבוצת משפחה חדשה' : '⚙ ניהול קבוצה: ' + family.family_name}</h2>
+
+      <div class="modal-section-title">שם הקבוצה</div>
+      <input type="text" id="fam-name" value="${family ? family.family_name : ''}" placeholder="לדוגמה: משפחת פלדמן-ברקוביץ" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+
+      <div class="modal-section-title">הערה (אופציונלי)</div>
+      <textarea id="fam-notes" placeholder="הערה...">${family ? (family.notes || '') : ''}</textarea>
+
+      ${!isNew ? `
+        <div class="modal-section-title">חברים בקבוצה (${members.length})</div>
+        <div id="fam-members-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;">
+          ${members.length === 0 ? '<div style="color:#9ca3af;padding:10px;">אין חברים עדיין</div>' :
+            members.map(m => `
+              <div style="display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--border);">
+                <span><strong>${m.owner_name}</strong> · ת.ז. ${m.id_number || '-'} · חלקה ${m.parcel} · ${fmtSqm(m.agreement_area || 0)}</span>
+                <button class="btn-sm btn-reject" data-action="rm-member" data-id="${m.id}" style="padding:1px 8px;font-size:0.7rem;">✗ הסר</button>
+              </div>
+            `).join('')
+          }
+        </div>
+
+        <div class="modal-section-title">הוסף חברים — חיפוש בכל הבעלים</div>
+        <input type="text" id="fam-add-search" placeholder="חפש שם / ת.ז. / חלקה..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+        <div id="fam-add-results" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:6px;display:none;"></div>
+      ` : ''}
+
+      <div class="modal-actions">
+        <button class="btn-sm btn-approve" id="fam-save-btn">💾 ${isNew ? 'צור קבוצה' : 'שמור שינויים'}</button>
+        ${!isNew ? `<button class="btn-sm btn-reject" id="fam-delete-btn">🗑 מחק קבוצה</button>` : ''}
+        <button class="btn-sm" id="fam-close-btn" style="background:#e5e7eb;color:#1f2937;">סגור</button>
+      </div>
+    `;
+
+    document.getElementById('family-modal').classList.add('visible');
+    document.getElementById('fam-close-btn').addEventListener('click', closeFamilyModal);
+    document.getElementById('fam-save-btn').addEventListener('click', () => saveFamily(familyId));
+
+    if (!isNew) {
+      document.getElementById('fam-delete-btn').addEventListener('click', () => deleteFamily(familyId));
+      document.querySelectorAll('[data-action="rm-member"]').forEach(b => {
+        b.addEventListener('click', () => removeMemberFromFamily(b.dataset.id));
+      });
+
+      // חיפוש בעלים להוסיף
+      const searchEl = document.getElementById('fam-add-search');
+      const resultsEl = document.getElementById('fam-add-results');
+      searchEl.addEventListener('input', () => {
+        const q = searchEl.value.trim().toLowerCase();
+        if (q.length < 1) { resultsEl.style.display = 'none'; return; }
+        const matches = allSignedOwners.filter(o => {
+          if (o.family_group_id) return false; // מסנן בעלים שכבר בקבוצה אחרת
+          const name = (o.owner_name || '').toLowerCase();
+          const idStr = String(o.id_number || '').toLowerCase();
+          const idNoZero = idStr.replace(/^0+/, '');
+          const qNoZero = q.replace(/^0+/, '');
+          const parcel = String(o.parcel || '');
+          return name.includes(q) || idStr.includes(q) || idNoZero === qNoZero || parcel === q;
+        }).slice(0, 50);
+        if (matches.length === 0) {
+          resultsEl.innerHTML = `<div style="padding:10px;color:#9ca3af;">לא נמצאו תוצאות (אולי כבר בקבוצה אחרת)</div>`;
+        } else {
+          resultsEl.innerHTML = matches.map(o => `
+            <div style="display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--border);font-size:0.87rem;">
+              <span><strong>${o.owner_name}</strong> · ת.ז. ${o.id_number || '-'} · חלקה ${o.parcel} · ${fmtSqm(o.agreement_area || 0)}</span>
+              <button class="btn-sm btn-approve" data-action="add-member" data-id="${o.id}" style="padding:1px 8px;font-size:0.7rem;">+ הוסף</button>
+            </div>
+          `).join('');
+          resultsEl.querySelectorAll('[data-action="add-member"]').forEach(b => {
+            b.addEventListener('click', () => addMemberToFamily(b.dataset.id, familyId));
+          });
+        }
+        resultsEl.style.display = 'block';
+      });
+    }
+  }
+
+  function closeFamilyModal() {
+    document.getElementById('family-modal').classList.remove('visible');
+  }
+  document.getElementById('family-modal').addEventListener('click', e => {
+    if (e.target.id === 'family-modal') closeFamilyModal();
+  });
+
+  async function saveFamily(familyId) {
+    const name = document.getElementById('fam-name').value.trim();
+    const notes = document.getElementById('fam-notes').value.trim();
+    if (!name) { alert('יש להזין שם קבוצה'); return; }
+
+    if (!familyId) {
+      const { error } = await supabase.from('family_groups').insert({ family_name: name, notes: notes || null });
+      if (error) { alert('שגיאה: ' + error.message); return; }
+    } else {
+      const { error } = await supabase.from('family_groups').update({ family_name: name, notes: notes || null }).eq('id', familyId);
+      if (error) { alert('שגיאה: ' + error.message); return; }
+    }
+    closeFamilyModal();
+    await loadFamilies();
+  }
+
+  async function deleteFamily(familyId) {
+    if (!confirm('למחוק את הקבוצה? החברים בה יוסרו מהקישור (אבל לא יימחקו).')) return;
+    // הסרת השיוך מכל החברים
+    await supabase.from('signed_owners').update({ family_group_id: null }).eq('family_group_id', familyId);
+    // מחיקת הקבוצה
+    const { error } = await supabase.from('family_groups').delete().eq('id', familyId);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    closeFamilyModal();
+    await loadFamilies();
+  }
+
+  async function addMemberToFamily(memberId, familyId) {
+    const { error } = await supabase.from('signed_owners').update({ family_group_id: familyId }).eq('id', memberId);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    closeFamilyModal();
+    await loadFamilies();
+    openFamilyModal(familyId); // רענון המודאל
+  }
+
+  async function removeMemberFromFamily(memberId) {
+    if (!confirm('להסיר את החבר מהקבוצה?')) return;
+    const { error } = await supabase.from('signed_owners').update({ family_group_id: null }).eq('id', memberId);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    const family = allFamilies.find(f => allSignedOwners.find(s => s.id === memberId)?.family_group_id === f.id);
+    closeFamilyModal();
+    await loadFamilies();
+    if (family) openFamilyModal(family.id);
+  }
+
+  // טוען משפחות גם כשנכנסים לטאב הזה
+  document.querySelector('[data-tab="families"]').addEventListener('click', () => {
+    if (allFamilies.length === 0) loadFamilies();
+  });
+
+  // אירועי טאב המשפחות
+  document.getElementById('family-search').addEventListener('input', () => {
+    if (allFamilies.length > 0) loadFamilies();
+  });
+  document.getElementById('add-family-btn').addEventListener('click', () => openFamilyModal(null));
+  document.getElementById('fam-refresh-btn').addEventListener('click', loadFamilies);
 
   // טעינה ראשונית
   await loadData();
