@@ -870,7 +870,7 @@
     <div class="admin-map-header">
       <h3>🗺 מפת התשריט — צבעים לפי סטטוס</h3>
       <div>
-        <button class="admin-map-editbtn" id="admin-map-editbtn">✏️ ערוך מיקומים</button>
+        <button class="admin-map-editbtn" id="admin-map-editbtn" style="display:none;">✏️ ערוך מיקומים</button>
         <button class="admin-map-reset" id="admin-map-reset" style="display:none;">↺ אפס</button>
         <button class="admin-map-toggle" id="admin-map-toggle">הסתר מפה ▲</button>
       </div>
@@ -2577,6 +2577,12 @@
       btn.textContent = 'הצג מפה ▼';
     }
   });
+
+  // הפעלת מצב עריכה רק עבור URL עם ?edit=1
+  // (השימוש: כשיהיה תשריט חדש, פתח את הדף עם /admin.html?edit=1)
+  if (new URLSearchParams(window.location.search).get('edit') === '1') {
+    document.getElementById('admin-map-editbtn').style.display = 'inline-block';
+  }
 
   // Toggle edit mode
   document.getElementById('admin-map-editbtn').addEventListener('click', () => {
