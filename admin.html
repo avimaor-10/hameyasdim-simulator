@@ -536,6 +536,110 @@
     font-family: inherit;
     font-size: 0.9rem;
   }
+  /* ===== מפה ויזואלית בטאב שיבוץ מגרשים ===== */
+  .admin-map-section {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .admin-map-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .admin-map-header h3 {
+    color: var(--primary);
+    font-size: 1.05rem;
+    margin: 0;
+  }
+  .admin-map-toggle {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+  }
+  .admin-map-container {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    aspect-ratio: 1647 / 2048;  /* יחס המפה */
+    background: #e5e7eb;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .admin-map-container.collapsed { display: none; }
+  .admin-map-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    user-select: none;
+    pointer-events: none;
+  }
+  .admin-map-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .admin-map-overlay polygon {
+    cursor: pointer;
+    transition: opacity 0.15s, stroke-width 0.15s;
+    stroke-width: 0.15;
+  }
+  .admin-map-overlay polygon.empty   { fill: rgba(255, 255, 255, 0.30); stroke: rgba(107, 114, 128, 0.7); }
+  .admin-map-overlay polygon.partial { fill: rgba(217, 119, 6, 0.55);   stroke: rgba(146, 64, 14, 0.9); }
+  .admin-map-overlay polygon.locked  { fill: rgba(45, 122, 62, 0.65);   stroke: rgba(6, 95, 70, 0.95); }
+  .admin-map-overlay polygon:hover {
+    opacity: 0.85;
+    stroke-width: 0.4;
+    stroke: var(--accent);
+  }
+  .admin-map-overlay text {
+    fill: white;
+    font-size: 1.3px;
+    font-weight: bold;
+    text-anchor: middle;
+    pointer-events: none;
+    paint-order: stroke;
+    stroke: rgba(0,0,0,0.6);
+    stroke-width: 0.25;
+  }
+  .admin-map-legend {
+    display: flex;
+    gap: 14px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .admin-map-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .admin-map-legend-box {
+    width: 18px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid;
+  }
+  .admin-map-legend-box.empty   { background: rgba(255,255,255,0.5); border-color: #6b7280; }
+  .admin-map-legend-box.partial { background: rgba(217,119,6,0.55);  border-color: #92400e; }
+  .admin-map-legend-box.locked  { background: rgba(45,122,62,0.65);  border-color: #065f46; }
+  .lot-card.highlighted {
+    box-shadow: 0 0 0 3px var(--accent);
+    transition: box-shadow 0.3s;
+  }
 </style>
 </head>
 <body>
@@ -676,6 +780,23 @@
     <div class="stat-card gold">
       <div class="label">סה"כ הוקצה</div>
       <div class="value" id="stat-lots-allocated" style="font-size:1.2rem;">-</div>
+    </div>
+  </div>
+
+  <div class="admin-map-section">
+    <div class="admin-map-header">
+      <h3>🗺 מפת התשריט — צבעים לפי סטטוס</h3>
+      <button class="admin-map-toggle" id="admin-map-toggle">הסתר מפה ▲</button>
+    </div>
+    <div class="admin-map-container" id="admin-map-container">
+      <img class="admin-map-image" src="assets/project-map.jpg" alt="תשריט הפרויקט">
+      <svg class="admin-map-overlay" id="admin-map-overlay" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="admin-map-legend">
+      <div class="admin-map-legend-item"><div class="admin-map-legend-box empty"></div>פנוי</div>
+      <div class="admin-map-legend-item"><div class="admin-map-legend-box partial"></div>חלקי</div>
+      <div class="admin-map-legend-item"><div class="admin-map-legend-box locked"></div>נעול במלואו</div>
+      <div class="admin-map-legend-item">💡 לחץ על מגרש במפה כדי לקפוץ לכרטיס שלו</div>
     </div>
   </div>
 
@@ -1640,6 +1761,9 @@
     document.querySelectorAll('[data-action="del-family"]').forEach(btn => {
       btn.addEventListener('click', () => deleteFamilyAllocation(btn.dataset.id));
     });
+
+    // עדכון המפה — צבעי הפוליגונים לפי סטטוס המגרשים העדכני
+    renderAdminMap();
   }
 
   // ===== מחיקת הקצאה משפחתית מקובצת (כל ההקצאות של משפחה במגרש מסוים) =====
@@ -2071,6 +2195,117 @@
     if (error) { alert('שגיאה: ' + error.message); return; }
     await loadAllocations();
   }
+
+  // ===== מפה ויזואלית — פוליגונים =====
+  const LOT_POLYGONS = {
+    1:  [{x:52.25,y:7.96},{x:52.45,y:8.06},{x:52.52,y:8.30},{x:50.86,y:8.79},{x:50.79,y:8.45},{x:52.18,y:8.01}],
+    2:  [{x:63.93,y:24.66},{x:65.17,y:26.56},{x:65.10,y:27.05},{x:64.82,y:27.10},{x:64.69,y:27.00},{x:64.69,y:27.15},{x:64.41,y:27.29},{x:63.58,y:27.49},{x:62.20,y:25.29},{x:62.61,y:25.05},{x:63.93,y:24.71}],
+    3:  [{x:65.51,y:30.62},{x:66.55,y:30.86},{x:65.10,y:31.35},{x:65.45,y:31.69},{x:66.14,y:31.49},{x:66.14,y:31.25},{x:66.28,y:31.45},{x:67.10,y:31.05},{x:68.35,y:31.40},{x:65.24,y:32.52},{x:64.89,y:32.32},{x:65.03,y:31.88},{x:64.41,y:31.20},{x:65.72,y:30.76},{x:65.58,y:30.62}],
+    4:  [{x:66.97,y:36.23},{x:67.10,y:36.23},{x:67.45,y:36.72},{x:67.80,y:37.45},{x:65.10,y:38.33},{x:64.41,y:37.06},{x:66.90,y:36.28}],
+    5:  [{x:68.35,y:38.53},{x:68.49,y:38.53},{x:68.97,y:39.45},{x:66.48,y:40.23},{x:66.48,y:40.33},{x:66.14,y:40.09},{x:66.07,y:39.84},{x:65.93,y:39.94},{x:65.72,y:39.36},{x:66.34,y:39.16},{x:66.41,y:39.40},{x:66.83,y:39.40},{x:66.55,y:39.06},{x:68.28,y:38.57}],
+    6:  [{x:75.26,y:42.19},{x:75.12,y:43.60},{x:73.60,y:45.26},{x:72.98,y:45.41},{x:73.74,y:44.34},{x:72.49,y:43.99},{x:73.95,y:44.09},{x:72.84,y:42.53},{x:73.46,y:42.38},{x:73.46,y:42.97},{x:74.22,y:42.48},{x:74.78,y:42.82},{x:75.26,y:42.24}],
+    7:  [{x:76.57,y:47.27},{x:76.92,y:47.31},{x:77.06,y:47.61},{x:76.50,y:47.90},{x:76.78,y:48.14},{x:76.64,y:48.14},{x:76.36,y:47.71},{x:76.02,y:47.66},{x:76.36,y:47.56},{x:76.43,y:47.71},{x:76.71,y:47.66},{x:76.43,y:47.46},{x:76.64,y:47.31}],
+    8:  [{x:77.75,y:51.71},{x:78.16,y:52.83},{x:77.40,y:52.93},{x:77.26,y:52.73},{x:77.26,y:52.98},{x:76.30,y:53.13},{x:76.09,y:53.32},{x:75.74,y:53.32},{x:75.54,y:53.13},{x:75.54,y:52.10},{x:77.68,y:51.76}],
+    9:  [{x:82.03,y:53.61},{x:84.73,y:57.52},{x:84.11,y:56.64},{x:82.17,y:57.08},{x:81.34,y:55.22},{x:79.68,y:55.13},{x:79.96,y:55.81},{x:78.44,y:56.20},{x:77.47,y:54.83},{x:79.27,y:54.44},{x:81.20,y:55.08},{x:80.65,y:54.05},{x:81.96,y:53.66}],
+    10: [{x:76.57,y:57.08},{x:77.06,y:57.08},{x:77.06,y:57.57},{x:77.19,y:57.08},{x:77.89,y:57.08},{x:77.82,y:57.62},{x:78.65,y:57.71},{x:77.89,y:57.81},{x:77.89,y:58.30},{x:77.47,y:58.30},{x:77.40,y:57.76},{x:77.26,y:58.30},{x:76.78,y:58.25},{x:76.64,y:57.08}],
+    11: [{x:70.84,y:55.08},{x:71.25,y:55.13},{x:71.25,y:55.42},{x:71.39,y:55.13},{x:71.87,y:55.18},{x:71.94,y:55.47},{x:72.08,y:55.22},{x:72.43,y:55.27},{x:72.22,y:55.91},{x:70.97,y:55.76},{x:72.15,y:56.01},{x:71.87,y:56.49},{x:71.25,y:56.25},{x:70.49,y:56.30},{x:70.84,y:55.13}],
+    12: [{x:65.72,y:52.78},{x:66.76,y:53.76},{x:65.79,y:54.05},{x:66.83,y:54.10},{x:64.96,y:56.84},{x:61.58,y:56.01},{x:63.23,y:56.59},{x:62.68,y:54.98},{x:63.72,y:55.08},{x:63.17,y:54.54},{x:65.65,y:52.83}],
+    13: [{x:59.36,y:58.11},{x:60.68,y:58.69},{x:61.30,y:59.38},{x:61.09,y:60.74},{x:60.40,y:60.64},{x:60.75,y:60.06},{x:60.12,y:59.77},{x:60.61,y:59.33},{x:59.99,y:59.08},{x:59.16,y:59.72},{x:58.19,y:59.18},{x:59.30,y:58.15}],
+    14: [{x:57.98,y:63.38},{x:59.43,y:63.77},{x:58.95,y:65.38},{x:60.12,y:63.62},{x:58.95,y:65.87},{x:58.60,y:65.43},{x:55.43,y:64.75},{x:56.05,y:63.53},{x:56.81,y:64.55},{x:58.12,y:64.55},{x:58.40,y:63.82},{x:57.64,y:63.96},{x:57.91,y:63.43}],
+    15: [{x:52.80,y:62.45},{x:52.87,y:62.70},{x:53.14,y:62.74},{x:53.14,y:63.23},{x:53.56,y:63.38},{x:53.42,y:63.48},{x:52.94,y:63.48},{x:52.94,y:62.99},{x:53.08,y:62.94},{x:52.87,y:62.89},{x:52.73,y:62.50}],
+    16: [{x:52.32,y:56.30},{x:54.04,y:57.47},{x:54.60,y:56.64},{x:56.25,y:57.42},{x:54.73,y:58.06},{x:55.63,y:58.64},{x:56.67,y:56.98},{x:57.50,y:57.42},{x:54.11,y:60.25},{x:50.31,y:58.20},{x:52.73,y:58.69},{x:51.62,y:56.93},{x:52.32,y:56.35}],
+    17: [{x:59.30,y:53.08},{x:60.88,y:53.86},{x:59.43,y:54.64},{x:58.95,y:55.66},{x:60.06,y:55.22},{x:59.02,y:56.20},{x:57.91,y:56.49},{x:54.11,y:54.64},{x:55.36,y:53.61},{x:57.01,y:55.22},{x:57.57,y:54.69},{x:59.02,y:55.08},{x:59.36,y:54.39},{x:58.47,y:53.81},{x:59.23,y:53.13}],
+    18: [{x:62.40,y:50.29},{x:63.30,y:50.78},{x:62.68,y:51.32},{x:63.23,y:51.61},{x:62.89,y:51.95},{x:61.99,y:51.46},{x:62.20,y:51.17},{x:61.78,y:50.93},{x:62.06,y:50.54},{x:62.40,y:50.34}],
+    19: [{x:65.65,y:47.22},{x:66.00,y:47.22},{x:65.93,y:47.56},{x:66.21,y:47.66},{x:66.21,y:48.00},{x:66.00,y:48.00},{x:65.51,y:47.71},{x:65.58,y:47.27}],
+    20: [{x:64.20,y:42.14},{x:64.41,y:42.43},{x:65.03,y:42.29},{x:64.41,y:42.53},{x:64.96,y:43.21},{x:64.06,y:43.21},{x:64.62,y:43.02},{x:64.41,y:42.77},{x:63.58,y:43.07},{x:63.65,y:43.36},{x:63.44,y:42.92},{x:63.03,y:42.87},{x:63.30,y:42.77},{x:63.10,y:42.53},{x:64.13,y:42.19}],
+    21: [{x:60.40,y:35.35},{x:60.75,y:35.40},{x:60.75,y:35.69},{x:61.02,y:35.84},{x:61.64,y:36.96},{x:60.19,y:37.40},{x:59.30,y:35.74},{x:59.99,y:35.64},{x:59.99,y:35.50},{x:60.33,y:35.40}],
+    22: [{x:51.14,y:30.62},{x:51.83,y:30.71},{x:51.76,y:30.96},{x:51.49,y:30.96},{x:51.35,y:31.20},{x:51.21,y:31.20},{x:51.00,y:31.15},{x:51.14,y:30.66}],
+    23: [{x:54.18,y:41.36},{x:54.87,y:41.41},{x:54.46,y:44.04},{x:54.39,y:42.87},{x:53.63,y:42.82},{x:53.42,y:43.31},{x:53.49,y:42.82},{x:52.73,y:42.77},{x:53.21,y:42.68},{x:53.08,y:41.99},{x:53.42,y:42.77},{x:53.49,y:42.33},{x:54.53,y:42.04},{x:54.73,y:41.46},{x:54.18,y:41.41}],
+    24: [{x:47.89,y:44.34},{x:48.79,y:44.38},{x:48.93,y:45.02},{x:48.93,y:44.43},{x:49.69,y:44.38},{x:49.69,y:44.87},{x:49.14,y:44.73},{x:49.69,y:45.46},{x:48.86,y:45.46},{x:49.21,y:45.02},{x:48.72,y:45.46},{x:47.75,y:45.41},{x:48.38,y:44.87},{x:47.75,y:44.82},{x:47.82,y:44.38}],
+    25: [{x:47.34,y:52.39},{x:47.96,y:52.44},{x:48.38,y:53.13},{x:49.14,y:52.78},{x:49.14,y:52.44},{x:49.83,y:52.44},{x:49.83,y:53.56},{x:49.14,y:53.76},{x:48.58,y:53.56},{x:47.55,y:53.71},{x:47.89,y:53.61},{x:47.27,y:53.52},{x:47.48,y:52.98},{x:47.27,y:52.44}],
+    26: [{x:37.73,y:62.21},{x:37.94,y:62.21},{x:37.94,y:62.94},{x:38.29,y:63.09},{x:37.60,y:63.43},{x:36.83,y:64.70},{x:35.38,y:64.16},{x:35.94,y:63.77},{x:35.73,y:63.67},{x:36.49,y:62.65},{x:37.87,y:62.94},{x:37.66,y:62.26}],
+    27: [{x:33.38,y:58.40},{x:34.49,y:58.59},{x:34.76,y:58.98},{x:34.21,y:59.42},{x:34.21,y:60.25},{x:33.86,y:60.11},{x:33.17,y:60.25},{x:32.83,y:60.01},{x:32.62,y:59.52},{x:32.96,y:59.38},{x:32.96,y:58.64},{x:33.31,y:58.45}],
+    28: [{x:37.25,y:49.12},{x:37.32,y:49.46},{x:38.15,y:49.51},{x:38.29,y:49.22},{x:38.29,y:49.71},{x:38.49,y:49.80},{x:38.29,y:49.80},{x:38.08,y:50.00},{x:37.18,y:49.95},{x:37.04,y:50.05},{x:37.25,y:49.17}],
+    29: [{x:44.09,y:51.51},{x:44.09,y:52.00},{x:44.85,y:52.05},{x:44.44,y:52.10},{x:44.37,y:52.73},{x:44.64,y:52.78},{x:43.26,y:52.78},{x:43.12,y:52.88},{x:43.19,y:52.29},{x:43.19,y:52.69},{x:43.61,y:52.73},{x:43.75,y:52.15},{x:43.19,y:51.95},{x:43.95,y:52.00},{x:44.02,y:51.56}],
+    30: [{x:37.60,y:43.99},{x:38.36,y:44.04},{x:38.15,y:44.53},{x:37.53,y:44.48},{x:37.60,y:44.04}],
+    31: [{x:40.91,y:46.44},{x:41.40,y:46.44},{x:41.60,y:47.17},{x:41.81,y:47.07},{x:41.74,y:46.83},{x:41.88,y:46.88},{x:41.88,y:47.17},{x:41.33,y:47.27},{x:41.60,y:47.27},{x:41.60,y:47.61},{x:40.50,y:47.56},{x:40.77,y:47.41},{x:40.91,y:46.48}],
+    32: [{x:42.23,y:40.82},{x:44.57,y:41.21},{x:44.71,y:41.89},{x:45.47,y:41.55},{x:45.68,y:42.33},{x:44.44,y:42.53},{x:44.44,y:44.34},{x:42.78,y:44.29},{x:42.85,y:43.16},{x:43.54,y:43.85},{x:44.30,y:42.14},{x:43.81,y:41.16},{x:42.29,y:40.82}],
+    33: [{x:37.94,y:37.84},{x:38.36,y:38.33},{x:38.22,y:38.77},{x:37.87,y:38.67},{x:37.73,y:39.21},{x:37.80,y:38.77},{x:37.32,y:38.38},{x:38.08,y:38.09},{x:38.01,y:37.84}],
+    34: [{x:44.44,y:35.84},{x:47.06,y:36.18},{x:45.34,y:38.28},{x:46.10,y:39.01},{x:44.71,y:39.60},{x:45.82,y:39.99},{x:44.30,y:40.14},{x:45.75,y:37.21},{x:43.26,y:36.67},{x:44.44,y:35.89}],
+    35: [{x:43.75,y:21.29},{x:48.51,y:22.31},{x:48.51,y:22.61},{x:46.92,y:22.46},{x:47.55,y:22.85},{x:46.99,y:24.27},{x:45.61,y:23.24},{x:45.34,y:23.88},{x:43.05,y:23.54},{x:42.64,y:23.44},{x:43.40,y:22.41},{x:47.34,y:22.90},{x:43.75,y:21.34}],
+    36: [{x:48.10,y:23.29},{x:49.76,y:23.73},{x:50.66,y:23.44},{x:50.73,y:23.83},{x:52.32,y:24.17},{x:51.83,y:25.24},{x:51.14,y:25.10},{x:51.21,y:24.66},{x:51.00,y:25.05},{x:49.97,y:25.00},{x:49.07,y:23.83},{x:48.24,y:24.51},{x:47.62,y:24.41},{x:48.10,y:23.34}],
+    37: [{x:45.13,y:19.43},{x:46.65,y:19.87},{x:45.96,y:21.00},{x:45.75,y:21.04},{x:45.89,y:21.14},{x:45.68,y:21.48},{x:45.20,y:21.44},{x:44.16,y:21.09},{x:44.37,y:20.70},{x:44.64,y:20.65},{x:44.51,y:20.51},{x:45.13,y:19.48}],
+    38: [{x:48.58,y:14.60},{x:49.90,y:15.09},{x:49.62,y:15.53},{x:49.07,y:15.33},{x:49.00,y:15.19},{x:48.79,y:15.23},{x:48.31,y:15.04},{x:48.51,y:14.65}],
+    40: [{x:56.32,y:13.87},{x:56.32,y:14.06},{x:56.95,y:13.92},{x:56.95,y:14.31},{x:57.22,y:14.11},{x:57.01,y:14.31},{x:57.22,y:14.75},{x:56.05,y:14.94},{x:55.84,y:15.33},{x:55.77,y:15.14},{x:55.08,y:15.28},{x:54.73,y:14.79},{x:55.01,y:14.79},{x:54.66,y:14.65},{x:56.25,y:14.92}],
+  };
+
+  function polygonCentroid(points) {
+    let cx = 0, cy = 0;
+    points.forEach(p => { cx += p.x; cy += p.y; });
+    return { x: cx / points.length, y: cy / points.length };
+  }
+
+  function renderAdminMap() {
+    const overlay = document.getElementById('admin-map-overlay');
+    if (!overlay) return;
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    overlay.innerHTML = '';
+
+    LOTS.forEach(lot => {
+      const points = LOT_POLYGONS[lot.id];
+      if (!points) return;
+      const status = lotStatus(lot);
+      const poly = document.createElementNS(SVG_NS, 'polygon');
+      poly.setAttribute('points', points.map(p => `${p.x},${p.y}`).join(' '));
+      poly.setAttribute('class', status.status);
+      poly.setAttribute('data-lot', lot.id);
+
+      // tooltip
+      const titleEl = document.createElementNS(SVG_NS, 'title');
+      const pct = status.required > 0 ? Math.round(status.allocated / status.required * 100) : 0;
+      titleEl.textContent = `מגרש ${lot.id} · ${lot.use} · נדרש ${fmtSqm(status.required)} · הוקצה ${fmtSqm(status.allocated)} (${pct}%)`;
+      poly.appendChild(titleEl);
+
+      // קליק → גלילה לכרטיס
+      poly.addEventListener('click', () => {
+        const cards = document.querySelectorAll('.lot-card');
+        cards.forEach(c => c.classList.remove('highlighted'));
+        // מחפש את הכרטיס לפי כותרת המגרש
+        for (const c of cards) {
+          const title = c.querySelector('.lot-card-title');
+          if (title && title.textContent.trim() === `מגרש ${lot.id}`) {
+            c.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            c.classList.add('highlighted');
+            setTimeout(() => c.classList.remove('highlighted'), 2500);
+            break;
+          }
+        }
+      });
+
+      overlay.appendChild(poly);
+
+      // מספר המגרש בתוך הפוליגון
+      const c = polygonCentroid(points);
+      const txt = document.createElementNS(SVG_NS, 'text');
+      txt.setAttribute('x', c.x);
+      txt.setAttribute('y', c.y + 0.5);
+      txt.textContent = lot.id;
+      overlay.appendChild(txt);
+    });
+  }
+
+  // Toggle map visibility
+  document.getElementById('admin-map-toggle').addEventListener('click', () => {
+    const container = document.getElementById('admin-map-container');
+    const btn = document.getElementById('admin-map-toggle');
+    if (container.classList.contains('collapsed')) {
+      container.classList.remove('collapsed');
+      btn.textContent = 'הסתר מפה ▲';
+    } else {
+      container.classList.add('collapsed');
+      btn.textContent = 'הצג מפה ▼';
+    }
+  });
 
   // אירועי טאב המגרשים
   document.getElementById('lot-search').addEventListener('input', renderLots);
