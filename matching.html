@@ -1015,12 +1015,16 @@
                   .filter(s => s.parcel === ps.parcel.parcel)
                   .map(s => normalizeId(s.id_number)));
                 const unsigned = tabu.owners.filter(o => !signedIds.has(normalizeId(o.id)));
-                if (unsigned.length === 0) return '';
-                const totalUnsignedArea = unsigned.reduce((s, o) => s + (o.area_sqm || 0), 0);
+                const totalUnsignedTabu = unsigned.reduce((s, o) => s + (o.area_sqm || 0), 0);
+                // נטו: מנכה את העסקאות (כי בעליהן עדיין בטאבו על שמם הקודם — כפילות)
+                const netThirdPartyArea = Math.max(0, totalUnsignedTabu - totalDealsArea);
+                if (unsigned.length === 0 && netThirdPartyArea < 1) return '';
+                const overlap = totalDealsArea > 0 ? Math.min(totalUnsignedTabu, totalDealsArea) : 0;
                 return `
                   <div style="margin-top:10px;padding:10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:0.85rem;">
-                    <strong>⚠ צד ג׳ (לא חתומים, לא בעסקה):</strong> ${unsigned.length} בעלי זכויות · ${Math.round(totalUnsignedArea).toLocaleString('he-IL')} מ"ר
+                    <strong>⚠ צד ג׳ (לא חתומים, לא בעסקה):</strong> ~${Math.round(netThirdPartyArea).toLocaleString('he-IL')} מ"ר
                     <button class="btn-cancel" data-action="show-tabu" data-parcel="${ps.parcel.parcel}" style="margin-right:8px;padding:2px 10px;font-size:0.78rem;background:var(--primary);color:white;border:none;border-radius:4px;cursor:pointer;">פרטים →</button>
+                    ${overlap > 0 ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">בטאבו מופיעים ${unsigned.length} בעלי זכויות לא-חתומים סך ${Math.round(totalUnsignedTabu).toLocaleString('he-IL')} מ"ר. מתוכם כ-${Math.round(overlap).toLocaleString('he-IL')} מ"ר מיוצגים בעסקאות (טרם נרשמו על שמן בטאבו).</div>` : ''}
                   </div>
                 `;
               })()}
