@@ -555,7 +555,7 @@
     font-size: 1.05rem;
     margin: 0;
   }
-  .admin-map-toggle {
+  .admin-map-toggle, .admin-map-editbtn, .admin-map-reset {
     background: var(--primary);
     color: white;
     border: none;
@@ -564,7 +564,27 @@
     cursor: pointer;
     font-family: inherit;
     font-size: 0.85rem;
+    margin-right: 6px;
   }
+  .admin-map-editbtn.active { background: var(--accent); color: var(--primary); font-weight: 700; }
+  .admin-map-reset { background: #fee2e2; color: #991b1b; }
+  .admin-map-overlay.editing { cursor: grab; }
+  .admin-map-overlay.editing .lot-marker { cursor: grab; }
+  .admin-map-overlay.editing .lot-marker.dragging { cursor: grabbing; }
+  .admin-map-overlay.editing .lot-marker circle {
+    stroke-dasharray: 0.3 0.2;
+    stroke-width: 0.3;
+  }
+  .admin-map-edit-banner {
+    background: var(--warning-light);
+    border: 1px solid var(--warning);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-top: 10px;
+    font-size: 0.85rem;
+    display: none;
+  }
+  .admin-map-edit-banner.active { display: block; }
   .admin-map-container {
     position: relative;
     width: 100%;
@@ -849,7 +869,15 @@
   <div class="admin-map-section">
     <div class="admin-map-header">
       <h3>🗺 מפת התשריט — צבעים לפי סטטוס</h3>
-      <button class="admin-map-toggle" id="admin-map-toggle">הסתר מפה ▲</button>
+      <div>
+        <button class="admin-map-editbtn" id="admin-map-editbtn">✏️ ערוך מיקומים</button>
+        <button class="admin-map-reset" id="admin-map-reset" style="display:none;">↺ אפס</button>
+        <button class="admin-map-toggle" id="admin-map-toggle">הסתר מפה ▲</button>
+      </div>
+    </div>
+    <div class="admin-map-edit-banner" id="admin-map-edit-banner">
+      <strong>✏️ מצב עריכה פעיל</strong> — גרור כל מספר למיקום הנכון בתוך הפוליגון. השינויים נשמרים אוטומטית בדפדפן שלך.
+      <button id="admin-map-export-positions" class="btn-sm btn-view" style="margin-right:8px;">📋 העתק מיקומים (`JSON`)</button>
     </div>
     <div class="admin-map-container" id="admin-map-container">
       <img class="admin-map-image" src="assets/project-map.jpg" alt="תשריט הפרויקט">
@@ -2309,6 +2337,26 @@
     return { x: cx / points.length, y: cy / points.length };
   }
 
+  // ===== מיקומי מספרים מותאמים (נשמרים בדפדפן) =====
+  const MARKER_POSITIONS_KEY = 'admin_map_marker_positions_v1';
+  let customMarkerPositions = {};
+  try {
+    customMarkerPositions = JSON.parse(localStorage.getItem(MARKER_POSITIONS_KEY) || '{}');
+  } catch { customMarkerPositions = {}; }
+  let isEditingMap = false;
+
+  function getMarkerPosition(lot) {
+    if (customMarkerPositions[lot.id]) return customMarkerPositions[lot.id];
+    const points = LOT_POLYGONS[lot.id];
+    if (!points) return null;
+    return polygonCentroid(points);
+  }
+
+  function saveMarkerPosition(lotId, pos) {
+    customMarkerPositions[lotId] = { x: +pos.x.toFixed(2), y: +pos.y.toFixed(2) };
+    localStorage.setItem(MARKER_POSITIONS_KEY, JSON.stringify(customMarkerPositions));
+  }
+
   function renderAdminMap() {
     const overlay = document.getElementById('admin-map-overlay');
     if (!overlay) return;
@@ -2402,33 +2450,74 @@
 
       overlay.appendChild(poly);
 
-      // מספר המגרש בתוך עיגול צבעוני (לפי סטטוס) — נקי ועקבי
-      const c = polygonCentroid(points);
+      // מספר המגרש בתוך עיגול צבעוני — נקי, עקבי, ניתן לגרירה במצב עריכה
+      const pos = getMarkerPosition(lot);
       const marker = document.createElementNS(SVG_NS, 'g');
       marker.setAttribute('class', `lot-marker ${status.status}`);
       marker.setAttribute('data-lot', lot.id);
 
       const circ = document.createElementNS(SVG_NS, 'circle');
-      circ.setAttribute('cx', c.x);
-      circ.setAttribute('cy', c.y);
+      circ.setAttribute('cx', pos.x);
+      circ.setAttribute('cy', pos.y);
       circ.setAttribute('r', '1.4');
 
       const txt = document.createElementNS(SVG_NS, 'text');
-      txt.setAttribute('x', c.x);
-      txt.setAttribute('y', c.y);
+      txt.setAttribute('x', pos.x);
+      txt.setAttribute('y', pos.y);
       txt.textContent = lot.id;
 
       marker.appendChild(circ);
       marker.appendChild(txt);
 
-      // אותם handlers בדיוק כמו הפוליגון — כדי שגם לחיצה על העיגול תעבוד
-      marker.addEventListener('mouseenter', (e) => poly.dispatchEvent(new MouseEvent('mouseenter', e)));
+      // אותם handlers בדיוק כמו הפוליגון — כדי שגם לחיצה על העיגול תעבוד (רק במצב רגיל)
+      marker.addEventListener('mouseenter', (e) => {
+        if (isEditingMap) return;
+        poly.dispatchEvent(new MouseEvent('mouseenter', e));
+      });
       marker.addEventListener('mousemove', (e) => {
+        if (isEditingMap) return;
         const ev = new MouseEvent('mousemove', { clientX: e.clientX, clientY: e.clientY, bubbles: true });
         poly.dispatchEvent(ev);
       });
-      marker.addEventListener('mouseleave', (e) => poly.dispatchEvent(new MouseEvent('mouseleave', e)));
-      marker.addEventListener('click', () => poly.dispatchEvent(new MouseEvent('click')));
+      marker.addEventListener('mouseleave', (e) => {
+        if (isEditingMap) return;
+        poly.dispatchEvent(new MouseEvent('mouseleave', e));
+      });
+      marker.addEventListener('click', () => {
+        if (isEditingMap) return;
+        poly.dispatchEvent(new MouseEvent('click'));
+      });
+
+      // ===== גרירה במצב עריכה =====
+      let isDragging = false;
+      marker.addEventListener('pointerdown', (e) => {
+        if (!isEditingMap) return;
+        e.preventDefault();
+        e.stopPropagation();
+        isDragging = true;
+        marker.classList.add('dragging');
+        marker.setPointerCapture(e.pointerId);
+      });
+      marker.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const rect = overlay.getBoundingClientRect();
+        const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+        const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+        circ.setAttribute('cx', xPct);
+        circ.setAttribute('cy', yPct);
+        txt.setAttribute('x', xPct);
+        txt.setAttribute('y', yPct);
+      });
+      marker.addEventListener('pointerup', (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        marker.classList.remove('dragging');
+        marker.releasePointerCapture(e.pointerId);
+        const rect = overlay.getBoundingClientRect();
+        const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+        const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+        saveMarkerPosition(lot.id, { x: xPct, y: yPct });
+      });
 
       overlay.appendChild(marker);
     });
@@ -2445,6 +2534,53 @@
       container.classList.add('collapsed');
       btn.textContent = 'הצג מפה ▼';
     }
+  });
+
+  // Toggle edit mode
+  document.getElementById('admin-map-editbtn').addEventListener('click', () => {
+    isEditingMap = !isEditingMap;
+    const btn = document.getElementById('admin-map-editbtn');
+    const overlay = document.getElementById('admin-map-overlay');
+    const banner = document.getElementById('admin-map-edit-banner');
+    const resetBtn = document.getElementById('admin-map-reset');
+    if (isEditingMap) {
+      btn.classList.add('active');
+      btn.textContent = '✓ סיים עריכה';
+      overlay.classList.add('editing');
+      banner.classList.add('active');
+      resetBtn.style.display = 'inline-block';
+    } else {
+      btn.classList.remove('active');
+      btn.textContent = '✏️ ערוך מיקומים';
+      overlay.classList.remove('editing');
+      banner.classList.remove('active');
+      resetBtn.style.display = 'none';
+    }
+  });
+
+  // Reset positions
+  document.getElementById('admin-map-reset').addEventListener('click', () => {
+    if (!confirm('לאפס את כל המיקומים שערכת? הם יחזרו למרכז הפוליגון המקורי.')) return;
+    customMarkerPositions = {};
+    localStorage.removeItem(MARKER_POSITIONS_KEY);
+    renderAdminMap();
+  });
+
+  // Export positions to JSON (לאדמין שירצה לשלוח אותם להטמעה קבועה)
+  document.getElementById('admin-map-export-positions').addEventListener('click', () => {
+    const json = JSON.stringify(customMarkerPositions, null, 2);
+    navigator.clipboard.writeText(json).then(() => {
+      alert(`✅ הועתקו ${Object.keys(customMarkerPositions).length} מיקומים ללוח. שלח לי כדי שאטמיע אותם בקוד הקבוע.`);
+    }).catch(() => {
+      // fallback אם הדפדפן לא תומך ב-clipboard
+      const ta = document.createElement('textarea');
+      ta.value = json;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      alert(`✅ הועתקו ${Object.keys(customMarkerPositions).length} מיקומים ללוח.`);
+    });
   });
 
   // אירועי טאב המגרשים
