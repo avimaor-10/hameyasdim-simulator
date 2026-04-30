@@ -2185,12 +2185,12 @@
         b.addEventListener('click', () => removeMemberFromFamily(b.dataset.id));
       });
 
-      // חיפוש בעלים להוסיף
+      // חיפוש בעלים להוסיף — עם סימון מרובה
       const searchEl = document.getElementById('fam-add-search');
       const resultsEl = document.getElementById('fam-add-results');
       searchEl.addEventListener('input', () => {
         const q = searchEl.value.trim().toLowerCase();
-        if (q.length < 1) { resultsEl.style.display = 'none'; return; }
+        if (q.length < 1) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
         const matches = allSignedOwners.filter(o => {
           if (o.family_group_id) return false; // מסנן בעלים שכבר בקבוצה אחרת
           const name = (o.owner_name || '').toLowerCase();
@@ -2199,18 +2199,60 @@
           const qNoZero = q.replace(/^0+/, '');
           const parcel = String(o.parcel || '');
           return name.includes(q) || idStr.includes(q) || idNoZero === qNoZero || parcel === q;
-        }).slice(0, 50);
+        }).slice(0, 100);
         if (matches.length === 0) {
           resultsEl.innerHTML = `<div style="padding:10px;color:#9ca3af;">לא נמצאו תוצאות (אולי כבר בקבוצה אחרת)</div>`;
         } else {
-          resultsEl.innerHTML = matches.map(o => `
-            <div style="display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--border);font-size:0.87rem;">
-              <span><strong>${o.owner_name}</strong> · ת.ז. ${o.id_number || '-'} · חלקה ${o.parcel} · ${fmtSqm(o.agreement_area || 0)}</span>
-              <button class="btn-sm btn-approve" data-action="add-member" data-id="${o.id}" style="padding:1px 8px;font-size:0.7rem;">+ הוסף</button>
+          // סרגל פעולות עליון: סמן הכל / נקה / הוסף נבחרים
+          resultsEl.innerHTML = `
+            <div style="display:flex;gap:8px;align-items:center;padding:8px;background:#f9fafb;border-bottom:2px solid var(--primary);position:sticky;top:0;z-index:1;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">
+                <input type="checkbox" id="fam-select-all" style="cursor:pointer;">
+                <span>סמן הכל (${matches.length})</span>
+              </label>
+              <button class="btn-sm btn-approve" id="fam-add-selected-btn" style="padding:4px 12px;font-size:0.82rem;margin-right:auto;" disabled>
+                ➕ הוסף <span id="fam-selected-count">0</span> נבחרים
+              </button>
             </div>
-          `).join('');
-          resultsEl.querySelectorAll('[data-action="add-member"]').forEach(b => {
-            b.addEventListener('click', () => addMemberToFamily(b.dataset.id, familyId));
+            ${matches.map(o => `
+              <label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);font-size:0.87rem;cursor:pointer;">
+                <input type="checkbox" class="fam-member-check" value="${o.id}" style="cursor:pointer;flex-shrink:0;">
+                <span><strong>${o.owner_name}</strong> · ת.ז. ${o.id_number || '-'} · חלקה ${o.parcel} · ${fmtSqm(o.agreement_area || 0)}</span>
+              </label>
+            `).join('')}
+          `;
+
+          const checkboxes = resultsEl.querySelectorAll('.fam-member-check');
+          const selectAll = document.getElementById('fam-select-all');
+          const addBtn = document.getElementById('fam-add-selected-btn');
+          const countEl = document.getElementById('fam-selected-count');
+
+          function updateCount() {
+            const checked = resultsEl.querySelectorAll('.fam-member-check:checked').length;
+            countEl.textContent = checked;
+            addBtn.disabled = checked === 0;
+            // עדכון "סמן הכל"
+            if (checked === 0) {
+              selectAll.checked = false;
+              selectAll.indeterminate = false;
+            } else if (checked === checkboxes.length) {
+              selectAll.checked = true;
+              selectAll.indeterminate = false;
+            } else {
+              selectAll.checked = false;
+              selectAll.indeterminate = true;
+            }
+          }
+
+          selectAll.addEventListener('change', () => {
+            checkboxes.forEach(c => { c.checked = selectAll.checked; });
+            updateCount();
+          });
+          checkboxes.forEach(c => c.addEventListener('change', updateCount));
+          addBtn.addEventListener('click', async () => {
+            const selectedIds = [...resultsEl.querySelectorAll('.fam-member-check:checked')].map(c => c.value);
+            if (selectedIds.length === 0) return;
+            await addMultipleMembersToFamily(selectedIds, familyId);
           });
         }
         resultsEl.style.display = 'block';
@@ -2254,6 +2296,18 @@
 
   async function addMemberToFamily(memberId, familyId) {
     const { error } = await supabase.from('signed_owners').update({ family_group_id: familyId }).eq('id', memberId);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    closeFamilyModal();
+    await loadFamilies();
+    openFamilyModal(familyId); // רענון המודאל
+  }
+
+  async function addMultipleMembersToFamily(memberIds, familyId) {
+    if (!memberIds || memberIds.length === 0) return;
+    const { error } = await supabase
+      .from('signed_owners')
+      .update({ family_group_id: familyId })
+      .in('id', memberIds);
     if (error) { alert('שגיאה: ' + error.message); return; }
     closeFamilyModal();
     await loadFamilies();
