@@ -2362,13 +2362,14 @@
         tooltip.classList.remove('visible');
       });
 
-      // קליק → אם המגרש פנוי/חלקי, פותח מודאל הוספת הקצאה. אם נעול, גולל לכרטיס.
+      // קליק במפה:
+      // - מגרש פנוי לחלוטין → פותח ישירות מודאל הוספת הקצאה
+      // - מגרש חלקי או נעול (כבר הוקצה) → גולל לכרטיס בלבד (להגנה מפני שיבוץ כפול)
       poly.addEventListener('click', () => {
-        if (status.status !== 'locked') {
-          // פתיחת מודאל ההקצאה ישירות
+        if (status.status === 'empty') {
           openAllocModal(lot.id);
         } else {
-          // מגרש נעול — רק גלילה לכרטיס + הדגשה
+          // מגרש כבר משובץ (חלקי או נעול) — רק גלילה לכרטיס + הדגשה
           const cards = document.querySelectorAll('.lot-card');
           cards.forEach(c => c.classList.remove('highlighted'));
           for (const c of cards) {
