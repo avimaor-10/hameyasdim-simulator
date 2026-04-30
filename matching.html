@@ -786,6 +786,15 @@
     allDealAllocations = dealAllocRes.data || [];
     allSignedAllocations = signedAllocRes.data || [];
 
+    // טעינת בעלי זכויות מהטאבו (קובץ סטטי שנוצר על ידי parse_all_tabu.py)
+    try {
+      const tabuRes = await fetch('assets/tabu_owners.json');
+      window.__tabuOwners = await tabuRes.json();
+    } catch (e) {
+      console.warn('לא הצליח לטעון tabu_owners.json', e);
+      window.__tabuOwners = {};
+    }
+
     render();
     renderLots();
   }
@@ -998,6 +1007,23 @@
                 ${signersHtml}
               </div>
               ${dealsHtml}
+              ${(() => {
+                // בעלי זכויות לא חתומים מהטאבו (אם נטען)
+                const tabu = window.__tabuOwners ? window.__tabuOwners[ps.parcel.parcel] : null;
+                if (!tabu || !tabu.owners) return '';
+                const signedIds = new Set(allSignedOwners
+                  .filter(s => s.parcel === ps.parcel.parcel)
+                  .map(s => normalizeId(s.id_number)));
+                const unsigned = tabu.owners.filter(o => !signedIds.has(normalizeId(o.id)));
+                if (unsigned.length === 0) return '';
+                const totalUnsignedArea = unsigned.reduce((s, o) => s + (o.area_sqm || 0), 0);
+                return `
+                  <div style="margin-top:10px;padding:10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:0.85rem;">
+                    <strong>⚠ צד ג׳ (לא חתומים, לא בעסקה):</strong> ${unsigned.length} בעלי זכויות · ${Math.round(totalUnsignedArea).toLocaleString('he-IL')} מ"ר
+                    <button class="btn-cancel" data-action="show-tabu" data-parcel="${ps.parcel.parcel}" style="margin-right:8px;padding:2px 10px;font-size:0.78rem;background:var(--primary);color:white;border:none;border-radius:4px;cursor:pointer;">פרטים →</button>
+                  </div>
+                `;
+              })()}
               ${ps.totalSigners > 0 && ps.selectedCount < ps.totalSigners ? `
                 <div class="gap-note">
                   <strong>🎯 עדיין לא בחרו:</strong> ${ps.gap} בעלים מבין ${ps.totalSigners} בחלקה זו
@@ -1332,10 +1358,93 @@
   document.getElementById('content').addEventListener('click', (e) => {
     const btn = e.target.closest('.add-owner-btn');
     if (btn) openAddOwnerModal(Number(btn.dataset.parcel));
+    const tabuBtn = e.target.closest('[data-action="show-tabu"]');
+    if (tabuBtn) openTabuModal(Number(tabuBtn.dataset.parcel));
+  });
+
+  // ===== מודאל בעלי זכויות מהטאבו (צד ג׳) =====
+  function openTabuModal(parcelNum) {
+    const tabu = window.__tabuOwners ? window.__tabuOwners[parcelNum] : null;
+    if (!tabu) {
+      alert('אין נתוני טאבו זמינים לחלקה זו');
+      return;
+    }
+    const signedIds = new Set(allSignedOwners
+      .filter(s => s.parcel === parcelNum)
+      .map(s => normalizeId(s.id_number)));
+
+    // הפרדה: חתומים אצלנו (יסומנו), לא חתומים (במוקד)
+    const allOwners = (tabu.owners || []).map(o => ({
+      ...o,
+      isSigned: signedIds.has(normalizeId(o.id)),
+    }));
+    const unsigned = allOwners.filter(o => !o.isSigned);
+    const signedOwners = allOwners.filter(o => o.isSigned);
+
+    const totalUnsignedArea = unsigned.reduce((s, o) => s + (o.area_sqm || 0), 0);
+    const totalSignedArea = signedOwners.reduce((s, o) => s + (o.area_sqm || 0), 0);
+
+    document.getElementById('tabu-owners-modal-content').innerHTML = `
+      <h2>🏛 בעלי זכויות בטאבו · חלקה ${parcelNum}</h2>
+      <div style="font-size:0.88rem;color:var(--text-muted);margin-bottom:14px;">
+        מקור: נסחי טאבו מרץ 2026 · סה"כ ${tabu.owners_count} בעלים · שטח חלקה: ${tabu.parcel_area.toLocaleString('he-IL')} מ"ר
+      </div>
+
+      <div style="background:#fef3c7;padding:10px 14px;border-radius:6px;margin-bottom:14px;border:1px solid #fcd34d;">
+        <div style="font-weight:600;margin-bottom:4px;">⚠ צד ג׳ — לא חתומים אצלנו ולא בעסקה (${unsigned.length})</div>
+        <div style="font-size:0.85rem;">סה"כ שטח: ${Math.round(totalUnsignedArea).toLocaleString('he-IL')} מ"ר</div>
+      </div>
+
+      <div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;">
+        ${unsigned.length === 0
+          ? '<div style="padding:20px;text-align:center;color:#9ca3af;">אין בעלי זכויות "צד ג׳" בחלקה זו — כולם חתומים אצלנו או בעסקה</div>'
+          : unsigned.map(o => `
+            <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);font-size:0.88rem;">
+              <span><strong>${o.name || '(שם לא זוהה)'}</strong> · ${o.kind === 'חפ' ? 'ח.פ.' : o.kind === 'דרכון' ? 'דרכון' : 'ת.ז.'} ${o.id} · חלק ${o.share_str}${o.action ? ` · ${o.action}` : ''}</span>
+              <span style="font-weight:600;color:var(--primary);">${Math.round(o.area_sqm).toLocaleString('he-IL')} מ"ר</span>
+            </div>
+          `).join('')
+        }
+      </div>
+
+      ${signedOwners.length > 0 ? `
+        <div style="margin-top:14px;font-size:0.85rem;color:var(--text-muted);">
+          <details>
+            <summary style="cursor:pointer;font-weight:600;">✓ ${signedOwners.length} בעלים שחתומים אצלנו (${Math.round(totalSignedArea).toLocaleString('he-IL')} מ"ר) — לחץ להצגה</summary>
+            <div style="margin-top:8px;">
+              ${signedOwners.map(o => `
+                <div style="padding:6px 14px;border-bottom:1px solid var(--border);font-size:0.85rem;">
+                  <strong>${o.name || '(שם לא זוהה)'}</strong> · ת.ז. ${o.id} · ${Math.round(o.area_sqm).toLocaleString('he-IL')} מ"ר
+                </div>
+              `).join('')}
+            </div>
+          </details>
+        </div>
+      ` : ''}
+
+      <div class="modal-actions">
+        <button class="btn-cancel" id="tabu-modal-close">סגור</button>
+      </div>
+    `;
+    document.getElementById('tabu-owners-modal').classList.add('visible');
+    document.getElementById('tabu-modal-close').addEventListener('click', () => {
+      document.getElementById('tabu-owners-modal').classList.remove('visible');
+    });
+  }
+
+  document.getElementById('tabu-owners-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'tabu-owners-modal') {
+      e.target.classList.remove('visible');
+    }
   });
 
   await loadData();
 </script>
+
+<!-- מודל בעלי זכויות מהטאבו (צד ג׳) -->
+<div class="modal-overlay" id="tabu-owners-modal">
+  <div class="modal" id="tabu-owners-modal-content"></div>
+</div>
 
 <!-- מודל הוספת בעלים חדש לחלקה -->
 <div class="modal-overlay" id="add-owner-modal">
