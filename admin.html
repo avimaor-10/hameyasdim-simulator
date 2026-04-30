@@ -569,7 +569,7 @@
     position: relative;
     width: 100%;
     max-width: 100%;
-    aspect-ratio: 1647 / 2048;  /* יחס המפה */
+    aspect-ratio: 1447 / 2048;  /* יחס המפה (תמונה אמיתית 1447x2048) */
     background: #e5e7eb;
     overflow: hidden;
     border-radius: 8px;
@@ -596,13 +596,60 @@
     transition: opacity 0.15s, stroke-width 0.15s;
     stroke-width: 0.15;
   }
-  .admin-map-overlay polygon.empty   { fill: rgba(255, 255, 255, 0.30); stroke: rgba(107, 114, 128, 0.7); }
-  .admin-map-overlay polygon.partial { fill: rgba(217, 119, 6, 0.55);   stroke: rgba(146, 64, 14, 0.9); }
-  .admin-map-overlay polygon.locked  { fill: rgba(45, 122, 62, 0.65);   stroke: rgba(6, 95, 70, 0.95); }
+  .admin-map-overlay polygon.empty   { fill: rgba(99, 102, 241, 0.25); stroke: rgba(67, 56, 202, 0.85); }
+  .admin-map-overlay polygon.partial { fill: rgba(217, 119, 6, 0.55);  stroke: rgba(146, 64, 14, 0.95); }
+  .admin-map-overlay polygon.locked  { fill: rgba(45, 122, 62, 0.65);  stroke: rgba(6, 95, 70, 1); }
   .admin-map-overlay polygon:hover {
-    opacity: 0.85;
-    stroke-width: 0.4;
-    stroke: var(--accent);
+    fill: rgba(201, 169, 97, 0.7) !important;
+    stroke: var(--primary) !important;
+    stroke-width: 0.5;
+  }
+  /* Tooltip צף */
+  .admin-map-tooltip {
+    position: absolute;
+    z-index: 100;
+    background: rgba(26, 58, 92, 0.97);
+    color: white;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    min-width: 220px;
+    max-width: 320px;
+    display: none;
+    line-height: 1.5;
+  }
+  .admin-map-tooltip.visible { display: block; }
+  .admin-map-tooltip .ttl-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .admin-map-tooltip .ttl-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    padding: 2px 0;
+  }
+  .admin-map-tooltip .ttl-label { opacity: 0.85; margin-left: 8px; }
+  .admin-map-tooltip .ttl-value { font-weight: 600; }
+  .admin-map-tooltip .ttl-divider {
+    border-top: 1px solid rgba(255,255,255,0.2);
+    margin: 6px 0;
+  }
+  .admin-map-tooltip .ttl-rights {
+    font-size: 0.75rem;
+    margin-top: 4px;
+    color: rgba(255,255,255,0.85);
+  }
+  .admin-map-tooltip .ttl-rights span {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin: 2px 2px 2px 0;
   }
   .admin-map-overlay text {
     fill: white;
@@ -791,6 +838,7 @@
     <div class="admin-map-container" id="admin-map-container">
       <img class="admin-map-image" src="assets/project-map.jpg" alt="תשריט הפרויקט">
       <svg class="admin-map-overlay" id="admin-map-overlay" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+      <div class="admin-map-tooltip" id="admin-map-tooltip"></div>
     </div>
     <div class="admin-map-legend">
       <div class="admin-map-legend-item"><div class="admin-map-legend-box empty"></div>פנוי</div>
@@ -2251,6 +2299,9 @@
     const SVG_NS = 'http://www.w3.org/2000/svg';
     overlay.innerHTML = '';
 
+    const tooltip = document.getElementById('admin-map-tooltip');
+    const container = document.getElementById('admin-map-container');
+
     LOTS.forEach(lot => {
       const points = LOT_POLYGONS[lot.id];
       if (!points) return;
@@ -2260,24 +2311,74 @@
       poly.setAttribute('class', status.status);
       poly.setAttribute('data-lot', lot.id);
 
-      // tooltip
-      const titleEl = document.createElementNS(SVG_NS, 'title');
-      const pct = status.required > 0 ? Math.round(status.allocated / status.required * 100) : 0;
-      titleEl.textContent = `מגרש ${lot.id} · ${lot.use} · נדרש ${fmtSqm(status.required)} · הוקצה ${fmtSqm(status.allocated)} (${pct}%)`;
-      poly.appendChild(titleEl);
+      // ריחוף — Tooltip עשיר שצף עם העכבר
+      poly.addEventListener('mouseenter', (e) => {
+        const pct = status.required > 0 ? Math.round(status.allocated / status.required * 100) : 0;
+        const rights = [];
+        if (lot.units > 0)       rights.push(`🏠 ${lot.units} דירות בעלות`);
+        if (lot.rentalUnits > 0) rights.push(`🔑 ${lot.rentalUnits} השכרה`);
+        if (lot.employment > 0)  rights.push(`🏢 ${lot.employment.toLocaleString('he-IL')} מ"ר תעסוקה`);
+        if (lot.commerce > 0)    rights.push(`🛍 ${lot.commerce.toLocaleString('he-IL')} מ"ר מסחר`);
+        const statusLabel = status.status === 'locked' ? '🔒 נעול 100%'
+                          : status.status === 'partial' ? `⏳ חלקי ${pct}%`
+                          : '○ פנוי';
+        // רשימת משובצים
+        let allocsHtml = '';
+        if (status.allocs && status.allocs.length > 0) {
+          const summary = status.allocs.slice(0, 4).map(a =>
+            `<div style="font-size:0.75rem;opacity:0.85;">• ${a.owner_name.length > 30 ? a.owner_name.slice(0,28)+'…' : a.owner_name}: ${fmtSqm(a.area)}</div>`
+          ).join('');
+          const more = status.allocs.length > 4 ? `<div style="font-size:0.7rem;opacity:0.7;">ועוד ${status.allocs.length - 4}…</div>` : '';
+          allocsHtml = `<div class="ttl-divider"></div><div style="font-size:0.78rem;font-weight:600;margin-bottom:3px;">משובצים:</div>${summary}${more}`;
+        }
 
-      // קליק → גלילה לכרטיס
+        tooltip.innerHTML = `
+          <div class="ttl-title">מגרש ${lot.id} · ${statusLabel}</div>
+          <div style="font-size:0.78rem;opacity:0.85;margin-bottom:4px;">${lot.use}</div>
+          <div class="ttl-rights">${rights.map(r => `<span>${r}</span>`).join('')}</div>
+          <div class="ttl-divider"></div>
+          <div class="ttl-row"><span class="ttl-label">שטח חקלאי נדרש:</span><span class="ttl-value">${fmtSqm(status.required)}</span></div>
+          <div class="ttl-row"><span class="ttl-label">הוקצה:</span><span class="ttl-value" style="color:#86efac;">${fmtSqm(status.allocated)}</span></div>
+          <div class="ttl-row"><span class="ttl-label">נותר:</span><span class="ttl-value" style="color:${status.remaining > 0 ? '#fcd34d' : '#86efac'};">${status.remaining > 0 ? fmtSqm(status.remaining) : '✓ נעול'}</span></div>
+          ${allocsHtml}
+        `;
+        tooltip.classList.add('visible');
+      });
+
+      poly.addEventListener('mousemove', (e) => {
+        const rect = container.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const tooltipW = tooltip.offsetWidth;
+        const tooltipH = tooltip.offsetHeight;
+        // מיקום ה-tooltip ביחס לסמן (משמאל אם אנחנו ימינה מאמצע)
+        const left = x + tooltipW + 20 < rect.width ? x + 14 : x - tooltipW - 14;
+        const top  = y + tooltipH + 20 < rect.height ? y + 14 : y - tooltipH - 14;
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top  = `${top}px`;
+      });
+
+      poly.addEventListener('mouseleave', () => {
+        tooltip.classList.remove('visible');
+      });
+
+      // קליק → אם המגרש פנוי/חלקי, פותח מודאל הוספת הקצאה. אם נעול, גולל לכרטיס.
       poly.addEventListener('click', () => {
-        const cards = document.querySelectorAll('.lot-card');
-        cards.forEach(c => c.classList.remove('highlighted'));
-        // מחפש את הכרטיס לפי כותרת המגרש
-        for (const c of cards) {
-          const title = c.querySelector('.lot-card-title');
-          if (title && title.textContent.trim() === `מגרש ${lot.id}`) {
-            c.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            c.classList.add('highlighted');
-            setTimeout(() => c.classList.remove('highlighted'), 2500);
-            break;
+        if (status.status !== 'locked') {
+          // פתיחת מודאל ההקצאה ישירות
+          openAllocModal(lot.id);
+        } else {
+          // מגרש נעול — רק גלילה לכרטיס + הדגשה
+          const cards = document.querySelectorAll('.lot-card');
+          cards.forEach(c => c.classList.remove('highlighted'));
+          for (const c of cards) {
+            const title = c.querySelector('.lot-card-title');
+            if (title && title.textContent.trim() === `מגרש ${lot.id}`) {
+              c.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              c.classList.add('highlighted');
+              setTimeout(() => c.classList.remove('highlighted'), 2500);
+              break;
+            }
           }
         }
       });
