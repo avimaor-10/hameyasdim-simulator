@@ -1402,38 +1402,45 @@
     });
 
     // 2) הקצאות מ-signed_owner_lot_allocations
-    // מפצלים: הקצאות עם family_allocation_id מקובצות יחד; אחרות מוצגות בנפרד
-    const familyAllocsByKey = {}; // "lotId:familyAllocId" → אגרגציה
+    // קיבוץ לפי משפחה (lot_id + family_group_id) — כל הקצאות אותה משפחה לאותו מגרש מתאחדות
+    const familyAllocsByKey = {}; // "lotId:familyGroupId" → אגרגציה
     allSignedAllocations.forEach(a => {
       const owner = allSignedOwners.find(o => o.id === a.signed_owner_id);
       if (!owner) return;
 
-      if (a.family_allocation_id) {
-        // קיבוץ הקצאות משפחתיות
-        const key = `${a.lot_id}:${a.family_allocation_id}`;
+      // אם הבעלים שייך לקבוצת משפחה (גם אם בעבר השיבוץ נעשה כשיבוץ בודד) — נשייך לקבוצה
+      // אבל רק אם ההקצאה עצמה נעשתה כקולקטיב (יש family_allocation_id)
+      if (a.family_allocation_id && owner.family_group_id) {
+        const key = `${a.lot_id}:${owner.family_group_id}`;
         if (!familyAllocsByKey[key]) {
           const fg = allFamilies.find(f => f.id === owner.family_group_id);
           familyAllocsByKey[key] = {
             source: 'family',
-            source_label: fg ? `משפחה: ${fg.family_name}` : 'משפחה',
             family_name: fg ? fg.family_name : 'משפחה',
             family_id: owner.family_group_id,
             lot_id: a.lot_id,
-            family_allocation_id: a.family_allocation_id,
-            allocation_id: `fam:${a.family_allocation_id}`, // מזהה לכפתור מחיקה
+            allocation_id: `fam:${owner.family_group_id}:${a.lot_id}`, // מזהה לכפתור מחיקה (קבוצה+מגרש)
             area: 0,
             member_count: 0,
             members_breakdown: [],
+            transactions_count: new Set(),
             allocation_type: a.allocation_type,
           };
         }
         familyAllocsByKey[key].area += +a.allocated_area || 0;
-        familyAllocsByKey[key].member_count += 1;
-        familyAllocsByKey[key].members_breakdown.push({
-          name: owner.owner_name,
-          parcel: owner.parcel,
-          area: +a.allocated_area || 0,
-        });
+        familyAllocsByKey[key].transactions_count.add(a.family_allocation_id);
+        // צבירה לפי חבר (מאחדת רישומי אותו חבר ממספר עסקאות)
+        const existingMember = familyAllocsByKey[key].members_breakdown.find(m => m.signed_owner_id === owner.id);
+        if (existingMember) {
+          existingMember.area += +a.allocated_area || 0;
+        } else {
+          familyAllocsByKey[key].members_breakdown.push({
+            signed_owner_id: owner.id,
+            name: owner.owner_name,
+            parcel: owner.parcel,
+            area: +a.allocated_area || 0,
+          });
+        }
       } else {
         // הקצאת אדמין רגילה (חתום בודד)
         if (!allocationsByLot[a.lot_id]) allocationsByLot[a.lot_id] = [];
@@ -1451,15 +1458,29 @@
       }
     });
 
-    // הוספת הקצאות משפחתיות מקובצות לרשימה
+    // הוספת הקצאות משפחתיות מקובצות לרשימה + חישוב נותר למשפחה
     Object.values(familyAllocsByKey).forEach(fa => {
       const lotId = fa.lot_id;
       if (!allocationsByLot[lotId]) allocationsByLot[lotId] = [];
+
+      // חישוב סטטיסטיקה למשפחה: סה"כ זכאות, הוקצה (כל המגרשים), נותר
+      const familyMembers = allSignedOwners.filter(s => s.family_group_id === fa.family_id);
+      const memberIds = new Set(familyMembers.map(m => m.id));
+      const familyTotalArea = familyMembers.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
+      const familyAllocatedAll = allSignedAllocations
+        .filter(x => memberIds.has(x.signed_owner_id))
+        .reduce((sum, x) => sum + (+x.allocated_area || 0), 0);
+      fa.family_total_area = familyTotalArea;
+      fa.family_allocated_total = familyAllocatedAll;
+      fa.family_remaining = familyTotalArea - familyAllocatedAll;
+      fa.member_count = familyMembers.length;
+
       // ממיינים את הפירוט
       fa.members_breakdown.sort((a, b) => b.area - a.area);
       // התאמה לשדות הסטנדרטיים של הצגה:
       fa.owner_name = `${fa.family_name} (${fa.member_count} חברים)`;
       fa.owner_id = '';
+      fa.transactions_count = fa.transactions_count.size;
       allocationsByLot[lotId].push(fa);
     });
 
@@ -1557,15 +1578,21 @@
                           :                                'del-deal';
             const delBtn = a.allocation_id ? `<button class="btn-sm btn-reject" data-action="${delType}" data-id="${a.allocation_id}" style="padding:1px 6px;font-size:0.7rem;margin-right:4px;" title="מחק הקצאה">✗</button>` : '';
             const parcelHint = a.owner_parcel ? ` <span style="color:var(--text-muted);font-size:0.75rem;">(חלקה ${a.owner_parcel})</span>` : '';
-            // לקבוצת משפחה — שורת פירוט נפתחת
+            // לקבוצת משפחה — שורת פירוט נפתחת + נותר למשפחה
             let familyDetail = '';
+            let familyRemainingHint = '';
             if (a.source === 'family' && a.members_breakdown) {
               const breakdown = a.members_breakdown.map(b =>
                 `<div style="font-size:0.75rem;color:var(--text-muted);">• ${b.name} (חלקה ${b.parcel}): ${fmtSqm(b.area)}</div>`
               ).join('');
-              familyDetail = `<details style="margin-top:4px;"><summary style="cursor:pointer;font-size:0.78rem;color:var(--primary);">פירוט חברים (${a.member_count})</summary>${breakdown}</details>`;
+              const txInfo = a.transactions_count > 1 ? ` · ${a.transactions_count} פעולות שיבוץ` : '';
+              familyDetail = `<details style="margin-top:4px;"><summary style="cursor:pointer;font-size:0.78rem;color:var(--primary);">פירוט חברים (${a.member_count})${txInfo}</summary>${breakdown}</details>`;
+              if (a.family_remaining !== undefined) {
+                const remColor = a.family_remaining > 0.5 ? 'var(--success)' : a.family_remaining < -0.5 ? 'var(--danger)' : 'var(--text-muted)';
+                familyRemainingHint = `<div style="font-size:0.75rem;color:${remColor};margin-top:2px;">נותר למשפחה: ${fmtSqm(Math.max(0, a.family_remaining))}${a.family_remaining < -0.5 ? ` (חריגה של ${fmtSqm(-a.family_remaining)})` : ''}</div>`;
+              }
             }
-            return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${parcelHint}${delBtn}${familyDetail}</span><span>${fmtSqm(a.area)}</span></div>`;
+            return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${parcelHint}${delBtn}${familyRemainingHint}${familyDetail}</span><span>${fmtSqm(a.area)}</span></div>`;
           }).join('');
 
       // תגי זכויות בנייה (חיווי ויזואלי)
@@ -1615,16 +1642,27 @@
     });
   }
 
-  // ===== מחיקת הקצאה משפחתית מקובצת =====
+  // ===== מחיקת הקצאה משפחתית מקובצת (כל ההקצאות של משפחה במגרש מסוים) =====
   async function deleteFamilyAllocation(compoundId) {
-    // compoundId = "fam:<familyAllocationId>"
+    // compoundId = "fam:<familyGroupId>:<lotId>"
     const parts = compoundId.split(':');
-    if (parts.length !== 2 || parts[0] !== 'fam') { alert('מזהה לא תקין'); return; }
-    const famAllocId = parts[1];
-    if (!confirm('למחוק את כל הקצאת המשפחה? פעולה זו תסיר את כל ההקצאות הפרטניות שנוצרו ביחד.')) return;
+    if (parts.length !== 3 || parts[0] !== 'fam') { alert('מזהה לא תקין'); return; }
+    const familyId = parts[1];
+    const lotId = +parts[2];
+
+    if (!confirm(`למחוק את כל הקצאות המשפחה במגרש ${lotId}? פעולה זו תסיר את כל הרישומים הפרטניים של חברי המשפחה במגרש זה (כל הפעולות יחד).`)) return;
+
+    // מאתרים את כל ה-signed_owner_id ים השייכים למשפחה
+    const memberIds = allSignedOwners
+      .filter(s => s.family_group_id === familyId)
+      .map(s => s.id);
+    if (memberIds.length === 0) { alert('לא נמצאו חברים במשפחה'); return; }
+
     const { error } = await supabase.from('signed_owner_lot_allocations')
       .delete()
-      .eq('family_allocation_id', famAllocId);
+      .eq('lot_id', lotId)
+      .in('signed_owner_id', memberIds)
+      .not('family_allocation_id', 'is', null);
     if (error) { alert('שגיאה: ' + error.message); return; }
     await loadAllocations();
   }
