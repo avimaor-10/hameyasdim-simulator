@@ -591,18 +591,18 @@
     width: 100%;
     height: 100%;
   }
+  /* פוליגון בלתי-נראה — שטח לחיץ בלבד, מציג מסגרת רק בריחוף */
   .admin-map-overlay polygon {
     cursor: pointer;
-    transition: opacity 0.15s, stroke-width 0.15s;
-    stroke-width: 0.15;
+    fill: transparent;
+    stroke: transparent;
+    stroke-width: 0.2;
+    transition: stroke 0.15s, fill 0.15s;
   }
-  .admin-map-overlay polygon.empty   { fill: rgba(99, 102, 241, 0.25); stroke: rgba(67, 56, 202, 0.85); }
-  .admin-map-overlay polygon.partial { fill: rgba(217, 119, 6, 0.55);  stroke: rgba(146, 64, 14, 0.95); }
-  .admin-map-overlay polygon.locked  { fill: rgba(45, 122, 62, 0.65);  stroke: rgba(6, 95, 70, 1); }
   .admin-map-overlay polygon:hover {
-    fill: rgba(201, 169, 97, 0.7) !important;
-    stroke: var(--primary) !important;
-    stroke-width: 0.5;
+    fill: rgba(201, 169, 97, 0.18);
+    stroke: var(--accent);
+    stroke-width: 0.4;
   }
   /* Tooltip צף */
   .admin-map-tooltip {
@@ -651,16 +651,32 @@
     border-radius: 3px;
     margin: 2px 2px 2px 0;
   }
-  .admin-map-overlay text {
-    fill: white;
-    font-size: 1.3px;
-    font-weight: bold;
-    text-anchor: middle;
-    pointer-events: none;
-    paint-order: stroke;
-    stroke: rgba(0,0,0,0.6);
-    stroke-width: 0.25;
+  /* מספר המגרש כעיגול צבעוני אחיד לפי סטטוס */
+  .admin-map-overlay .lot-marker {
+    cursor: pointer;
   }
+  .admin-map-overlay .lot-marker circle {
+    transition: r 0.15s, stroke-width 0.15s;
+    stroke-width: 0.2;
+    r: 1.4;
+  }
+  .admin-map-overlay .lot-marker.empty   circle { fill: rgba(255,255,255,0.97); stroke: #4338ca; }
+  .admin-map-overlay .lot-marker.partial circle { fill: rgba(254, 215, 170, 0.98); stroke: #92400e; }
+  .admin-map-overlay .lot-marker.locked  circle { fill: rgba(167, 243, 208, 0.98); stroke: #065f46; }
+  .admin-map-overlay .lot-marker:hover circle {
+    stroke-width: 0.45;
+    stroke: var(--accent);
+  }
+  .admin-map-overlay .lot-marker text {
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+    font-size: 1.1px;
+    font-weight: 700;
+  }
+  .admin-map-overlay .lot-marker.empty   text { fill: #1e3a8a; }
+  .admin-map-overlay .lot-marker.partial text { fill: #7c2d12; }
+  .admin-map-overlay .lot-marker.locked  text { fill: #064e3b; }
   .admin-map-legend {
     display: flex;
     gap: 14px;
@@ -2386,13 +2402,35 @@
 
       overlay.appendChild(poly);
 
-      // מספר המגרש בתוך הפוליגון
+      // מספר המגרש בתוך עיגול צבעוני (לפי סטטוס) — נקי ועקבי
       const c = polygonCentroid(points);
+      const marker = document.createElementNS(SVG_NS, 'g');
+      marker.setAttribute('class', `lot-marker ${status.status}`);
+      marker.setAttribute('data-lot', lot.id);
+
+      const circ = document.createElementNS(SVG_NS, 'circle');
+      circ.setAttribute('cx', c.x);
+      circ.setAttribute('cy', c.y);
+      circ.setAttribute('r', '1.4');
+
       const txt = document.createElementNS(SVG_NS, 'text');
       txt.setAttribute('x', c.x);
-      txt.setAttribute('y', c.y + 0.5);
+      txt.setAttribute('y', c.y);
       txt.textContent = lot.id;
-      overlay.appendChild(txt);
+
+      marker.appendChild(circ);
+      marker.appendChild(txt);
+
+      // אותם handlers בדיוק כמו הפוליגון — כדי שגם לחיצה על העיגול תעבוד
+      marker.addEventListener('mouseenter', (e) => poly.dispatchEvent(new MouseEvent('mouseenter', e)));
+      marker.addEventListener('mousemove', (e) => {
+        const ev = new MouseEvent('mousemove', { clientX: e.clientX, clientY: e.clientY, bubbles: true });
+        poly.dispatchEvent(ev);
+      });
+      marker.addEventListener('mouseleave', (e) => poly.dispatchEvent(new MouseEvent('mouseleave', e)));
+      marker.addEventListener('click', () => poly.dispatchEvent(new MouseEvent('click')));
+
+      overlay.appendChild(marker);
     });
   }
 
