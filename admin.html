@@ -2677,12 +2677,22 @@
         const statusLabel = status.status === 'locked' ? '🔒 נעול 100%'
                           : status.status === 'partial' ? `⏳ חלקי ${pct}%`
                           : '○ פנוי';
-        // רשימת משובצים
+        // רשימת משובצים — כולל "נותר" לבעלים בודד / למשפחה
         let allocsHtml = '';
         if (status.allocs && status.allocs.length > 0) {
-          const summary = status.allocs.slice(0, 4).map(a =>
-            `<div style="font-size:0.75rem;opacity:0.85;">• ${a.owner_name.length > 30 ? a.owner_name.slice(0,28)+'…' : a.owner_name}: ${fmtSqm(a.area)}</div>`
-          ).join('');
+          const summary = status.allocs.slice(0, 4).map(a => {
+            const name = a.owner_name.length > 30 ? a.owner_name.slice(0,28)+'…' : a.owner_name;
+            // הוספת מידע נותר אם רלוונטי
+            let remHint = '';
+            if (a.source === 'signed-admin' && a.owner_remaining !== undefined) {
+              const remColor = a.owner_remaining > 0.5 ? '#86efac' : a.owner_remaining < -0.5 ? '#fca5a5' : '#cbd5e1';
+              remHint = `<span style="color:${remColor};font-size:0.7rem;margin-right:6px;">(נותר ${fmtSqm(Math.max(0, a.owner_remaining))})</span>`;
+            } else if ((a.source === 'family' || a.source === 'nadlan-all' || a.source === 'yitzhaki-all') && a.family_remaining !== undefined) {
+              const remColor = a.family_remaining > 0.5 ? '#86efac' : a.family_remaining < -0.5 ? '#fca5a5' : '#cbd5e1';
+              remHint = `<span style="color:${remColor};font-size:0.7rem;margin-right:6px;">(נותר ${fmtSqm(Math.max(0, a.family_remaining))})</span>`;
+            }
+            return `<div style="font-size:0.75rem;opacity:0.9;">• ${name}: ${fmtSqm(a.area)}${remHint}</div>`;
+          }).join('');
           const more = status.allocs.length > 4 ? `<div style="font-size:0.7rem;opacity:0.7;">ועוד ${status.allocs.length - 4}…</div>` : '';
           allocsHtml = `<div class="ttl-divider"></div><div style="font-size:0.78rem;font-weight:600;margin-bottom:3px;">משובצים:</div>${summary}${more}`;
         }
