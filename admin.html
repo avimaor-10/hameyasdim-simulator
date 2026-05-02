@@ -1655,7 +1655,13 @@
           });
         }
       } else {
-        // הקצאת אדמין רגילה (חתום בודד)
+        // הקצאת אדמין רגילה (חתום בודד) — חישוב נותר לבעלים
+        const ownerTotalArea = +owner.agreement_area || +owner.unification_area || 0;
+        const ownerAllocated = allSignedAllocations
+          .filter(x => x.signed_owner_id === owner.id)
+          .reduce((sum, x) => sum + (+x.allocated_area || 0), 0);
+        const ownerRemaining = ownerTotalArea - ownerAllocated;
+
         if (!allocationsByLot[a.lot_id]) allocationsByLot[a.lot_id] = [];
         allocationsByLot[a.lot_id].push({
           source: 'signed-admin',
@@ -1667,6 +1673,9 @@
           allocation_id: a.id,
           signed_owner_id: owner.id,
           allocation_type: a.allocation_type,
+          owner_total_area: ownerTotalArea,
+          owner_allocated_total: ownerAllocated,
+          owner_remaining: ownerRemaining,
         });
       }
     });
@@ -1887,6 +1896,12 @@
                           :                                  'del-deal';
             const delBtn = a.allocation_id ? `<button class="btn-sm btn-reject" data-action="${delType}" data-id="${a.allocation_id}" style="padding:1px 6px;font-size:0.7rem;margin-right:4px;" title="מחק הקצאה">✗</button>` : '';
             const parcelHint = a.owner_parcel ? ` <span style="color:var(--text-muted);font-size:0.75rem;">(חלקה ${a.owner_parcel})</span>` : '';
+            // לבעלים בודד — נותר לבעלים (אם הוא בשיבוץ אדמין)
+            let ownerRemainingHint = '';
+            if (a.source === 'signed-admin' && a.owner_remaining !== undefined) {
+              const remColor = a.owner_remaining > 0.5 ? 'var(--success)' : a.owner_remaining < -0.5 ? 'var(--danger)' : 'var(--text-muted)';
+              ownerRemainingHint = `<div style="font-size:0.75rem;color:${remColor};margin-top:2px;">נותר לבעלים: ${fmtSqm(Math.max(0, a.owner_remaining))}${a.owner_remaining < -0.5 ? ` (חריגה של ${fmtSqm(-a.owner_remaining)})` : ''}</div>`;
+            }
             // לקבוצת משפחה / קבוצת קטגוריה — שורת פירוט נפתחת + נותר
             let familyDetail = '';
             let familyRemainingHint = '';
@@ -1901,7 +1916,7 @@
                 familyRemainingHint = `<div style="font-size:0.75rem;color:${remColor};margin-top:2px;">נותר למשפחה: ${fmtSqm(Math.max(0, a.family_remaining))}${a.family_remaining < -0.5 ? ` (חריגה של ${fmtSqm(-a.family_remaining)})` : ''}</div>`;
               }
             }
-            return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${parcelHint}${delBtn}${familyRemainingHint}${familyDetail}</span><span>${fmtSqm(a.area)}</span></div>`;
+            return `<div class="alloc-row"><span>${badge}<strong>${a.owner_name}</strong>${parcelHint}${delBtn}${ownerRemainingHint}${familyRemainingHint}${familyDetail}</span><span>${fmtSqm(a.area)}</span></div>`;
           }).join('');
 
       // תגי זכויות בנייה (חיווי ויזואלי)
