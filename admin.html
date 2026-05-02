@@ -1710,6 +1710,8 @@
 
     // 3) הקצאות מ-deal_lot_allocations (נדלן נדלן / דודי יצחקי)
     // עסקאות עם family_allocation_id ושייכות למשפחה — מקובצות עם הקצאות החתומים תחת אותה משפחה
+    // עסקאות עם family_allocation_id בלבד (ללא family_group_id) — מקובצות לפי "כל העסקאות בקטגוריה"
+    const categoryGroupsByKey = {}; // "lotId:famAllocId" → אגרגציה לקטגוריה (ללא family_group_id)
     allDealAllocations.forEach(a => {
       const deal = allDeals.find(d => d.id === a.deal_id);
       if (!deal) return;
@@ -1749,7 +1751,37 @@
         return;
       }
 
-      // הקצאה עצמאית של עסקה (לא דרך משפחה)
+      // הקצאה קולקטיבית "כל העסקאות בקטגוריה" — קיבוץ לפי family_allocation_id (ללא family_group_id)
+      if (a.family_allocation_id && !deal.family_group_id) {
+        const key = `${a.lot_id}:${a.family_allocation_id}`;
+        if (!categoryGroupsByKey[key]) {
+          categoryGroupsByKey[key] = {
+            source: deal.category === 'נדלן נדלן' ? 'nadlan-all' : 'yitzhaki-all',
+            category: deal.category,
+            family_allocation_id: a.family_allocation_id,
+            lot_id: a.lot_id,
+            allocation_id: `cat:${a.family_allocation_id}`,
+            area: 0,
+            members_breakdown: [],
+            allocation_type: a.allocation_type,
+          };
+        }
+        categoryGroupsByKey[key].area += +a.allocated_area || 0;
+        const existingMember = categoryGroupsByKey[key].members_breakdown.find(m => m.deal_id === deal.id);
+        if (existingMember) {
+          existingMember.area += +a.allocated_area || 0;
+        } else {
+          categoryGroupsByKey[key].members_breakdown.push({
+            deal_id: deal.id,
+            name: deal.deal_name,
+            parcel: deal.parcel,
+            area: +a.allocated_area || 0,
+          });
+        }
+        return;
+      }
+
+      // הקצאה עצמאית של עסקה בודדת
       const sourceKey = deal.category === 'נדלן נדלן' ? 'nadlan' : 'yitzhaki';
       if (!allocationsByLot[a.lot_id]) allocationsByLot[a.lot_id] = [];
       allocationsByLot[a.lot_id].push({
@@ -1762,6 +1794,17 @@
         deal_id: deal.id,
         allocation_type: a.allocation_type,
       });
+    });
+
+    // הוספת הקצאות הקטגוריה הקולקטיביות
+    Object.values(categoryGroupsByKey).forEach(cg => {
+      const lotId = cg.lot_id;
+      if (!allocationsByLot[lotId]) allocationsByLot[lotId] = [];
+      cg.members_breakdown.sort((a, b) => b.area - a.area);
+      cg.member_count = cg.members_breakdown.length;
+      cg.owner_name = `${cg.category} — כל העסקאות (${cg.member_count})`;
+      cg.owner_id = '';
+      allocationsByLot[lotId].push(cg);
     });
 
     renderLots();
@@ -1832,18 +1875,21 @@
             const badge = a.source === 'signed-self'  ? `<span class="alloc-source-badge alloc-source-signed">🔵 חתום (לקוח)</span>`
                        :  a.source === 'signed-admin' ? `<span class="alloc-source-badge alloc-source-signed">🔵 חתום (אדמין)</span>`
                        :  a.source === 'family'       ? `<span class="alloc-source-badge" style="background:#fce7f3;color:#9f1239;">👨‍👩‍👧 משפחה</span>`
+                       :  a.source === 'nadlan-all'   ? `<span class="alloc-source-badge alloc-source-nadlan">🌐 נדלן נדלן (קבוצתי)</span>`
+                       :  a.source === 'yitzhaki-all' ? `<span class="alloc-source-badge alloc-source-yitzhaki">🌐 דודי יצחקי (קבוצתי)</span>`
                        :  a.source === 'nadlan'       ? `<span class="alloc-source-badge alloc-source-nadlan">🏢 נדלן נדלן</span>`
                        :                                 `<span class="alloc-source-badge alloc-source-yitzhaki">👤 דודי יצחקי</span>`;
-            const delType = a.source === 'signed-admin' ? 'del-signed'
-                          : a.source === 'signed-self'  ? 'del-self'
-                          : a.source === 'family'       ? 'del-family'
-                          :                                'del-deal';
+            const delType = a.source === 'signed-admin'  ? 'del-signed'
+                          : a.source === 'signed-self'   ? 'del-self'
+                          : a.source === 'family'        ? 'del-family'
+                          : (a.source === 'nadlan-all' || a.source === 'yitzhaki-all') ? 'del-cat'
+                          :                                  'del-deal';
             const delBtn = a.allocation_id ? `<button class="btn-sm btn-reject" data-action="${delType}" data-id="${a.allocation_id}" style="padding:1px 6px;font-size:0.7rem;margin-right:4px;" title="מחק הקצאה">✗</button>` : '';
             const parcelHint = a.owner_parcel ? ` <span style="color:var(--text-muted);font-size:0.75rem;">(חלקה ${a.owner_parcel})</span>` : '';
-            // לקבוצת משפחה — שורת פירוט נפתחת + נותר למשפחה
+            // לקבוצת משפחה / קבוצת קטגוריה — שורת פירוט נפתחת + נותר
             let familyDetail = '';
             let familyRemainingHint = '';
-            if (a.source === 'family' && a.members_breakdown) {
+            if ((a.source === 'family' || a.source === 'nadlan-all' || a.source === 'yitzhaki-all') && a.members_breakdown) {
               const breakdown = a.members_breakdown.map(b =>
                 `<div style="font-size:0.75rem;color:var(--text-muted);">• ${b.name} (חלקה ${b.parcel}): ${fmtSqm(b.area)}</div>`
               ).join('');
@@ -1902,9 +1948,26 @@
     document.querySelectorAll('[data-action="del-family"]').forEach(btn => {
       btn.addEventListener('click', () => deleteFamilyAllocation(btn.dataset.id));
     });
+    document.querySelectorAll('[data-action="del-cat"]').forEach(btn => {
+      btn.addEventListener('click', () => deleteCategoryAllocation(btn.dataset.id));
+    });
 
     // עדכון המפה — צבעי הפוליגונים לפי סטטוס המגרשים העדכני
     renderAdminMap();
+  }
+
+  // ===== מחיקת הקצאה קטגוריאלית מקובצת (כל עסקאות נדלן/יצחקי שהוקצו יחד) =====
+  async function deleteCategoryAllocation(compoundId) {
+    // compoundId = "cat:<familyAllocationId>"
+    const parts = compoundId.split(':');
+    if (parts.length !== 2 || parts[0] !== 'cat') { alert('מזהה לא תקין'); return; }
+    const famAllocId = parts[1];
+    if (!confirm('למחוק את כל הקצאות הקטגוריה הזו? פעולה זו תסיר את כל הרישומים שנוצרו יחד באותו שיבוץ קולקטיבי.')) return;
+    const { error } = await supabase.from('deal_lot_allocations')
+      .delete()
+      .eq('family_allocation_id', famAllocId);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    await loadAllocations();
   }
 
   // ===== מחיקת הקצאה משפחתית מקובצת (חתומים + עסקאות באותו מגרש) =====
@@ -2092,9 +2155,15 @@
       if (v === 'nadlan' || v === 'yitzhaki') {
         const cat = v === 'nadlan' ? 'נדלן נדלן' : 'דודי יצחקי';
         const deals = availableDeals.filter(d => d.category === cat);
-        dealSel.innerHTML = '<option value="">בחר עסקה...</option>' + deals.map(d =>
-          `<option value="${d.id}">#${d.deal_number} ${d.deal_name} · חלקה ${d.parcel} · נותר ${d.remaining_area.toFixed(0)} מ"ר</option>`
-        ).join('');
+        const totalRemaining = deals.reduce((s, d) => s + d.remaining_area, 0);
+        // אופציה ראשונה: כל העסקאות יחד (פיזור פרופורציונלי)
+        dealSel.innerHTML = `
+          <option value="">בחר עסקה...</option>
+          <option value="__all__">🌐 כל העסקאות (${deals.length}) — פיזור פרופורציונלי · נותר סה"כ ${Math.round(totalRemaining).toLocaleString('he-IL')} מ"ר</option>
+          ${deals.map(d =>
+            `<option value="${d.id}">#${d.deal_number} ${d.deal_name} · חלקה ${d.parcel} · נותר ${d.remaining_area.toFixed(0)} מ"ר</option>`
+          ).join('')}
+        `;
         dealSection.style.display = 'block';
         dealInfo.textContent = '';
       } else if (v === 'signed') {
@@ -2369,11 +2438,59 @@
     const dealId = document.getElementById('alloc-deal').value;
     if (!dealId) { alert('יש לבחור עסקה'); return; }
 
+    // === אופציה: "כל העסקאות" של הקטגוריה (פיזור פרופורציונלי) ===
+    if (dealId === '__all__') {
+      const cat = source === 'nadlan' ? 'נדלן נדלן' : 'דודי יצחקי';
+      const catDeals = allDeals.filter(d => d.category === cat);
+      const dealStats = catDeals.map(d => {
+        const used = allDealAllocations
+          .filter(a => a.deal_id === d.id)
+          .reduce((s, a) => s + (+a.allocated_area || 0), 0);
+        return { deal: d, available: Math.max(0, (+d.area_sqm || 0) - used) };
+      }).filter(x => x.available > 0);
+
+      const totalAvailable = dealStats.reduce((s, x) => s + x.available, 0);
+      if (totalAvailable < 0.5) {
+        alert('אין שטח נותר בעסקאות הקטגוריה');
+        return;
+      }
+      if (totalAvailable < area - 0.5) {
+        alert(`❌ השטח המבוקש (${area} מ"ר) גדול מהנותר בכל הקטגוריה (${totalAvailable.toFixed(2)} מ"ר)`);
+        return;
+      }
+
+      // UUID משותף לקיבוץ הקצאות הפעולה (תצוגה כשורה אחת בכרטיס המגרש)
+      const groupAllocId = crypto.randomUUID();
+      const noteSuffix = `כל עסקאות ${cat} (פיזור)`;
+      const fullNotes = notes ? `${notes} | ${noteSuffix}` : noteSuffix;
+
+      const rows = dealStats.map(({ deal, available }) => {
+        const proportion = available / totalAvailable;
+        const dealArea = Math.round(area * proportion * 100) / 100;
+        return {
+          deal_id: deal.id,
+          lot_id: lotId,
+          allocation_type: allocType,
+          allocated_area: dealArea,
+          notes: fullNotes,
+          family_allocation_id: groupAllocId,
+        };
+      }).filter(r => r.allocated_area >= 0.01);
+
+      const { error } = await supabase.from('deal_lot_allocations').insert(rows);
+      if (error) { alert('שגיאה: ' + error.message); return; }
+      closeAllocModal();
+      await loadAllocations();
+      return;
+    }
+
+    // === עסקה בודדת ===
     const deal = allDeals.find(d => d.id === dealId);
     const usedArea = allDealAllocations.filter(a => a.deal_id === dealId).reduce((s, a) => s + (+a.allocated_area || 0), 0);
     const dealRemaining = (+deal.area_sqm || 0) - usedArea;
     if (area > dealRemaining + 0.5) {
-      if (!confirm(`השטח חורג מהנותר בעסקה (${dealRemaining.toFixed(2)} מ"ר). להמשיך?`)) return;
+      alert(`❌ השטח חורג מהנותר בעסקה (${dealRemaining.toFixed(2)} מ"ר)`);
+      return;
     }
 
     const { error } = await supabase.from('deal_lot_allocations').insert({
