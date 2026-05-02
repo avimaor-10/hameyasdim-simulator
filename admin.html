@@ -1671,42 +1671,8 @@
       }
     });
 
-    // הוספת הקצאות משפחתיות מקובצות לרשימה + חישוב נותר למשפחה (חתומים + עסקאות)
-    Object.values(familyAllocsByKey).forEach(fa => {
-      const lotId = fa.lot_id;
-      if (!allocationsByLot[lotId]) allocationsByLot[lotId] = [];
-
-      // חישוב סטטיסטיקה למשפחה — כולל גם חתומים וגם עסקאות
-      const familyMembers = allSignedOwners.filter(s => s.family_group_id === fa.family_id);
-      const familyDeals = allDeals.filter(d => d.family_group_id === fa.family_id);
-      const memberIds = new Set(familyMembers.map(m => m.id));
-      const dealIds = new Set(familyDeals.map(d => d.id));
-
-      const signersTotal = familyMembers.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
-      const dealsTotal = familyDeals.reduce((sum, d) => sum + (+d.area_sqm || 0), 0);
-      const familyTotalArea = signersTotal + dealsTotal;
-
-      const allocatedSigners = allSignedAllocations
-        .filter(x => memberIds.has(x.signed_owner_id))
-        .reduce((sum, x) => sum + (+x.allocated_area || 0), 0);
-      const allocatedDeals = allDealAllocations
-        .filter(x => dealIds.has(x.deal_id))
-        .reduce((sum, x) => sum + (+x.allocated_area || 0), 0);
-      const familyAllocatedAll = allocatedSigners + allocatedDeals;
-
-      fa.family_total_area = familyTotalArea;
-      fa.family_allocated_total = familyAllocatedAll;
-      fa.family_remaining = familyTotalArea - familyAllocatedAll;
-      fa.member_count = familyMembers.length + familyDeals.length;
-
-      // ממיינים את הפירוט
-      fa.members_breakdown.sort((a, b) => b.area - a.area);
-      // התאמה לשדות הסטנדרטיים של הצגה:
-      fa.owner_name = `${fa.family_name} (${fa.member_count} חברים)`;
-      fa.owner_id = '';
-      fa.transactions_count = fa.transactions_count.size;
-      allocationsByLot[lotId].push(fa);
-    });
+    // (העיבוד של familyAllocsByKey הועבר לאחר עיבוד הקצאות העסקאות,
+    //  כך שגם הקצאות עסקה משפחתית ייכנסו לקיבוץ)
 
     // 3) הקצאות מ-deal_lot_allocations (נדלן נדלן / דודי יצחקי)
     // עסקאות עם family_allocation_id ושייכות למשפחה — מקובצות עם הקצאות החתומים תחת אותה משפחה
@@ -1805,6 +1771,41 @@
       cg.owner_name = `${cg.category} — כל העסקאות (${cg.member_count})`;
       cg.owner_id = '';
       allocationsByLot[lotId].push(cg);
+    });
+
+    // הוספת הקצאות משפחתיות מקובצות לרשימה (מאוחר — אחרי שגם עסקאות הוספו)
+    // חישוב נותר למשפחה (חתומים + עסקאות)
+    Object.values(familyAllocsByKey).forEach(fa => {
+      const lotId = fa.lot_id;
+      if (!allocationsByLot[lotId]) allocationsByLot[lotId] = [];
+
+      const familyMembers = allSignedOwners.filter(s => s.family_group_id === fa.family_id);
+      const familyDeals = allDeals.filter(d => d.family_group_id === fa.family_id);
+      const memberIds = new Set(familyMembers.map(m => m.id));
+      const dealIds = new Set(familyDeals.map(d => d.id));
+
+      const signersTotal = familyMembers.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
+      const dealsTotal = familyDeals.reduce((sum, d) => sum + (+d.area_sqm || 0), 0);
+      const familyTotalArea = signersTotal + dealsTotal;
+
+      const allocatedSigners = allSignedAllocations
+        .filter(x => memberIds.has(x.signed_owner_id))
+        .reduce((sum, x) => sum + (+x.allocated_area || 0), 0);
+      const allocatedDeals = allDealAllocations
+        .filter(x => dealIds.has(x.deal_id))
+        .reduce((sum, x) => sum + (+x.allocated_area || 0), 0);
+      const familyAllocatedAll = allocatedSigners + allocatedDeals;
+
+      fa.family_total_area = familyTotalArea;
+      fa.family_allocated_total = familyAllocatedAll;
+      fa.family_remaining = familyTotalArea - familyAllocatedAll;
+      fa.member_count = familyMembers.length + familyDeals.length;
+
+      fa.members_breakdown.sort((a, b) => b.area - a.area);
+      fa.owner_name = `${fa.family_name} (${fa.member_count} חברים)`;
+      fa.owner_id = '';
+      fa.transactions_count = fa.transactions_count.size;
+      allocationsByLot[lotId].push(fa);
     });
 
     renderLots();
