@@ -2054,8 +2054,9 @@
       </div>
       <input type="hidden" id="alloc-type" value="${allocType}">
 
-      <div class="modal-section-title">שטח להקצאה (מ"ר)</div>
-      <input type="number" id="alloc-area" min="1" step="0.01" placeholder="עד ${remaining.toFixed(2)} מ\"ר" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+      <div class="modal-section-title">שטח להקצאה (מ"ר) · מקסימום: ${remaining.toFixed(2)} מ"ר</div>
+      <input type="number" id="alloc-area" min="1" step="0.01" max="${remaining.toFixed(2)}" placeholder="עד ${remaining.toFixed(2)} מ\"ר" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">לא ניתן להקצות יותר מהנותר במגרש</div>
 
       <div class="modal-section-title">הערה (אופציונלי)</div>
       <textarea id="alloc-notes" placeholder="הערה..." style="min-height:50px;"></textarea>
@@ -2242,8 +2243,10 @@
 
     const area = parseFloat(areaRaw);
     if (!area || area <= 0) { alert('יש להזין שטח חיובי'); return; }
+    // חסימה מוחלטת — לא ניתן להקצות יותר מהנותר במגרש
     if (area > lotRemaining + 0.5) {
-      if (!confirm(`השטח שהוזן (${area} מ"ר) גדול מהנותר במגרש (${lotRemaining.toFixed(2)} מ"ר). להמשיך בכל זאת?`)) return;
+      alert(`❌ לא ניתן להקצות יותר מהנותר במגרש.\n\nניסית להקצות: ${area.toLocaleString('he-IL')} מ"ר\nנותר במגרש: ${lotRemaining.toFixed(2).toLocaleString('he-IL')} מ"ר\nחריגה: ${(area - lotRemaining).toFixed(2)} מ"ר`);
+      return;
     }
 
     // === הקצאה מקבוצת משפחה (פיזור פרופורציונלי על חתומים + עסקאות) ===
