@@ -2648,10 +2648,12 @@
     const list = document.getElementById('families-list');
     list.innerHTML = `<div style="text-align:center;padding:30px;"><div class="spinner"></div></div>`;
 
-    const [famRes, signedRes, allocRes] = await Promise.all([
+    const [famRes, signedRes, allocRes, dealsRes, dealAllocRes] = await Promise.all([
       supabase.from('family_groups').select('*').eq('is_active', true).order('family_name'),
       supabase.from('signed_owners').select('*').eq('is_active', true),
       supabase.from('signed_owner_lot_allocations').select('signed_owner_id, allocated_area'),
+      supabase.from('partnership_deals').select('*').eq('is_active', true),
+      supabase.from('deal_lot_allocations').select('deal_id, allocated_area'),
     ]);
 
     if (famRes.error) {
@@ -2661,26 +2663,50 @@
 
     allFamilies = famRes.data || [];
     allSignedOwners = signedRes.data || [];
+    allDeals = dealsRes.data || [];
     const allocs = allocRes.data || [];
+    const dealAllocs = dealAllocRes.data || [];
 
-    // חישוב לכל משפחה: חברים, שטח כולל, הוקצה
+    // חישוב לכל משפחה: חברים (חתומים + עסקאות), שטח כולל, הוקצה
     const families = allFamilies.map(fg => {
-      const members = allSignedOwners.filter(s => s.family_group_id === fg.id);
-      const memberIds = new Set(members.map(m => m.id));
-      const totalArea = members.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
-      const allocatedArea = allocs
-        .filter(a => memberIds.has(a.signed_owner_id))
+      const memberSigners = allSignedOwners.filter(s => s.family_group_id === fg.id);
+      const memberDeals = allDeals.filter(d => d.family_group_id === fg.id);
+      const signerIds = new Set(memberSigners.map(m => m.id));
+      const dealIds = new Set(memberDeals.map(d => d.id));
+
+      const signersArea = memberSigners.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
+      const dealsArea = memberDeals.reduce((sum, d) => sum + (+d.area_sqm || 0), 0);
+      const totalArea = signersArea + dealsArea;
+
+      const allocatedSignersArea = allocs
+        .filter(a => signerIds.has(a.signed_owner_id))
         .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
-      return { ...fg, members, totalArea, allocatedArea, remaining: totalArea - allocatedArea };
+      const allocatedDealsArea = dealAllocs
+        .filter(a => dealIds.has(a.deal_id))
+        .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
+      const allocatedArea = allocatedSignersArea + allocatedDealsArea;
+
+      return {
+        ...fg,
+        members: memberSigners,
+        memberDeals,
+        signersArea,
+        dealsArea,
+        totalArea,
+        allocatedArea,
+        remaining: totalArea - allocatedArea,
+      };
     });
 
     // סטטיסטיקה
     document.getElementById('stat-fam-total').textContent = families.length;
-    document.getElementById('stat-fam-members').textContent = families.reduce((s, f) => s + f.members.length, 0);
+    const totalMembers = families.reduce((s, f) => s + f.members.length + f.memberDeals.length, 0);
+    document.getElementById('stat-fam-members').textContent = totalMembers;
     const totalFamArea = families.reduce((s, f) => s + f.totalArea, 0);
     document.getElementById('stat-fam-area').textContent = totalFamArea > 0 ? fmtSqm(totalFamArea) : '-';
-    const orphanCount = allSignedOwners.filter(s => !s.family_group_id).length;
-    document.getElementById('stat-fam-orphan').textContent = orphanCount;
+    const orphanSigners = allSignedOwners.filter(s => !s.family_group_id).length;
+    const orphanDeals = allDeals.filter(d => !d.family_group_id).length;
+    document.getElementById('stat-fam-orphan').textContent = `${orphanSigners} + ${orphanDeals} עסק׳`;
 
     renderFamilies(families);
   }
@@ -2703,16 +2729,28 @@
 
     document.getElementById('families-list').innerHTML = filtered.map(f => {
       const pct = f.totalArea > 0 ? (f.allocatedArea / f.totalArea) * 100 : 0;
-      const parcelList = [...new Set(f.members.map(m => m.parcel))].sort((a,b) => a-b).join(', ');
-      const membersPreview = f.members.slice(0, 5).map(m => m.owner_name).join(' · ');
-      const moreCount = f.members.length > 5 ? ` ועוד ${f.members.length - 5}` : '';
+      const parcels = new Set();
+      f.members.forEach(m => parcels.add(m.parcel));
+      f.memberDeals.forEach(d => parcels.add(d.parcel));
+      const parcelList = [...parcels].sort((a,b) => a-b).join(', ');
+      // תצוגת חברים: בעלים + עסקאות
+      const memberItems = [
+        ...f.members.map(m => `🔵 ${m.owner_name}`),
+        ...f.memberDeals.map(d => `🏢 ${d.deal_name}`),
+      ];
+      const membersPreview = memberItems.slice(0, 5).join(' · ');
+      const totalCount = f.members.length + f.memberDeals.length;
+      const moreCount = totalCount > 5 ? ` ועוד ${totalCount - 5}` : '';
+      const breakdown = f.dealsArea > 0
+        ? `${f.members.length} חתומים (${fmtSqm(f.signersArea)}) + ${f.memberDeals.length} עסקאות (${fmtSqm(f.dealsArea)})`
+        : `${f.members.length} חברים`;
 
       return `
         <div class="lot-card" style="margin-bottom:14px;">
           <div class="lot-card-header">
             <div>
               <div class="lot-card-title">👨‍👩‍👧 ${f.family_name}</div>
-              <div class="lot-card-use">${f.members.length} חברים · בחלקות ${parcelList || '—'}</div>
+              <div class="lot-card-use">${breakdown} · בחלקות ${parcelList || '—'}</div>
             </div>
             <button class="btn-sm btn-view" data-action="manage-fam" data-id="${f.id}">⚙ ניהול</button>
           </div>
@@ -2738,6 +2776,7 @@
     const isNew = !familyId;
     const family = isNew ? null : allFamilies.find(f => f.id === familyId);
     const members = isNew ? [] : allSignedOwners.filter(s => s.family_group_id === familyId);
+    const memberDeals = isNew ? [] : allDeals.filter(d => d.family_group_id === familyId);
 
     document.getElementById('family-modal-content').innerHTML = `
       <h2>${isNew ? '➕ יצירת קבוצת משפחה חדשה' : '⚙ ניהול קבוצה: ' + family.family_name}</h2>
@@ -2749,21 +2788,35 @@
       <textarea id="fam-notes" placeholder="הערה...">${family ? (family.notes || '') : ''}</textarea>
 
       ${!isNew ? `
-        <div class="modal-section-title">חברים בקבוצה (${members.length})</div>
+        <div class="modal-section-title">חברים בקבוצה — חתומים (${members.length}) + עסקאות (${memberDeals.length})</div>
         <div id="fam-members-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;">
-          ${members.length === 0 ? '<div style="color:#9ca3af;padding:10px;">אין חברים עדיין</div>' :
-            members.map(m => `
+          ${(members.length + memberDeals.length) === 0 ? '<div style="color:#9ca3af;padding:10px;">אין חברים עדיין</div>' : ''}
+          ${members.map(m => `
+            <div style="display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--border);">
+              <span><span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;font-size:0.72rem;font-weight:600;margin-left:4px;">🔵 חתום</span><strong>${m.owner_name}</strong> · ת.ז. ${m.id_number || '-'} · חלקה ${m.parcel} · ${fmtSqm(m.agreement_area || 0)}</span>
+              <button class="btn-sm btn-reject" data-action="rm-member" data-id="${m.id}" style="padding:1px 8px;font-size:0.7rem;">✗ הסר</button>
+            </div>
+          `).join('')}
+          ${memberDeals.map(d => {
+            const catBadge = d.category === 'נדלן נדלן'
+              ? '<span style="background:#fed7aa;color:#9a3412;padding:1px 5px;border-radius:3px;font-size:0.72rem;font-weight:600;margin-left:4px;">🏢 נדלן נדלן</span>'
+              : '<span style="background:#e9d5ff;color:#6b21a8;padding:1px 5px;border-radius:3px;font-size:0.72rem;font-weight:600;margin-left:4px;">👤 דודי יצחקי</span>';
+            return `
               <div style="display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--border);">
-                <span><strong>${m.owner_name}</strong> · ת.ז. ${m.id_number || '-'} · חלקה ${m.parcel} · ${fmtSqm(m.agreement_area || 0)}</span>
-                <button class="btn-sm btn-reject" data-action="rm-member" data-id="${m.id}" style="padding:1px 8px;font-size:0.7rem;">✗ הסר</button>
+                <span>${catBadge}<strong>${d.deal_name}</strong> · חלקה ${d.parcel} · ${fmtSqm(d.area_sqm || 0)}</span>
+                <button class="btn-sm btn-reject" data-action="rm-deal" data-id="${d.id}" style="padding:1px 8px;font-size:0.7rem;">✗ הסר</button>
               </div>
-            `).join('')
-          }
+            `;
+          }).join('')}
         </div>
 
-        <div class="modal-section-title">הוסף חברים — חיפוש בכל הבעלים</div>
+        <div class="modal-section-title">הוסף בעלים חתומים — חיפוש</div>
         <input type="text" id="fam-add-search" placeholder="חפש שם / ת.ז. / חלקה..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
         <div id="fam-add-results" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:6px;display:none;"></div>
+
+        <div class="modal-section-title">הוסף עסקאות — נדלן נדלן או דודי יצחקי</div>
+        <input type="text" id="fam-add-deal-search" placeholder="חפש שם עסקה / חלקה..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+        <div id="fam-add-deal-results" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:6px;display:none;"></div>
       ` : ''}
 
       <div class="modal-actions">
@@ -2781,6 +2834,74 @@
       document.getElementById('fam-delete-btn').addEventListener('click', () => deleteFamily(familyId));
       document.querySelectorAll('[data-action="rm-member"]').forEach(b => {
         b.addEventListener('click', () => removeMemberFromFamily(b.dataset.id));
+      });
+      document.querySelectorAll('[data-action="rm-deal"]').forEach(b => {
+        b.addEventListener('click', () => removeDealFromFamily(b.dataset.id, familyId));
+      });
+
+      // === חיפוש עסקאות להוספה ===
+      const dealSearchEl = document.getElementById('fam-add-deal-search');
+      const dealResultsEl = document.getElementById('fam-add-deal-results');
+      dealSearchEl.addEventListener('input', () => {
+        const q = dealSearchEl.value.trim().toLowerCase();
+        if (q.length < 1) { dealResultsEl.style.display = 'none'; dealResultsEl.innerHTML = ''; return; }
+        const matches = allDeals.filter(d => {
+          if (d.family_group_id) return false; // מסנן עסקאות שכבר בקבוצה אחרת
+          const name = (d.deal_name || '').toLowerCase();
+          const parcel = String(d.parcel || '');
+          const cat = (d.category || '').toLowerCase();
+          return name.includes(q) || parcel === q || cat.includes(q);
+        }).slice(0, 100);
+
+        if (matches.length === 0) {
+          dealResultsEl.innerHTML = `<div style="padding:10px;color:#9ca3af;">לא נמצאו עסקאות (אולי כבר בקבוצה אחרת)</div>`;
+        } else {
+          dealResultsEl.innerHTML = `
+            <div style="display:flex;gap:8px;align-items:center;padding:8px;background:#f9fafb;border-bottom:2px solid var(--primary);position:sticky;top:0;z-index:1;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">
+                <input type="checkbox" id="fam-deal-select-all" style="cursor:pointer;">
+                <span>סמן הכל (${matches.length})</span>
+              </label>
+              <button class="btn-sm btn-approve" id="fam-add-deals-btn" style="padding:4px 12px;font-size:0.82rem;margin-right:auto;" disabled>
+                ➕ הוסף <span id="fam-deals-count">0</span> נבחרים
+              </button>
+            </div>
+            ${matches.map(d => {
+              const catBadge = d.category === 'נדלן נדלן'
+                ? '<span style="background:#fed7aa;color:#9a3412;padding:1px 5px;border-radius:3px;font-size:0.7rem;font-weight:600;">🏢 נדלן</span>'
+                : '<span style="background:#e9d5ff;color:#6b21a8;padding:1px 5px;border-radius:3px;font-size:0.7rem;font-weight:600;">👤 יצחקי</span>';
+              return `
+                <label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);font-size:0.87rem;cursor:pointer;">
+                  <input type="checkbox" class="fam-deal-check" value="${d.id}" style="cursor:pointer;flex-shrink:0;">
+                  <span>${catBadge} <strong>${d.deal_name}</strong> · חלקה ${d.parcel} · ${fmtSqm(d.area_sqm || 0)}</span>
+                </label>
+              `;
+            }).join('')}
+          `;
+          const checkboxes = dealResultsEl.querySelectorAll('.fam-deal-check');
+          const selectAll = document.getElementById('fam-deal-select-all');
+          const addBtn = document.getElementById('fam-add-deals-btn');
+          const countEl = document.getElementById('fam-deals-count');
+          function updateCount() {
+            const checked = dealResultsEl.querySelectorAll('.fam-deal-check:checked').length;
+            countEl.textContent = checked;
+            addBtn.disabled = checked === 0;
+            if (checked === 0) { selectAll.checked = false; selectAll.indeterminate = false; }
+            else if (checked === checkboxes.length) { selectAll.checked = true; selectAll.indeterminate = false; }
+            else { selectAll.checked = false; selectAll.indeterminate = true; }
+          }
+          selectAll.addEventListener('change', () => {
+            checkboxes.forEach(c => { c.checked = selectAll.checked; });
+            updateCount();
+          });
+          checkboxes.forEach(c => c.addEventListener('change', updateCount));
+          addBtn.addEventListener('click', async () => {
+            const selectedIds = [...dealResultsEl.querySelectorAll('.fam-deal-check:checked')].map(c => c.value);
+            if (selectedIds.length === 0) return;
+            await addDealsToFamily(selectedIds, familyId);
+          });
+        }
+        dealResultsEl.style.display = 'block';
       });
 
       // חיפוש בעלים להוסיף — עם סימון מרובה
@@ -2882,9 +3003,10 @@
   }
 
   async function deleteFamily(familyId) {
-    if (!confirm('למחוק את הקבוצה? החברים בה יוסרו מהקישור (אבל לא יימחקו).')) return;
-    // הסרת השיוך מכל החברים
+    if (!confirm('למחוק את הקבוצה? כל החברים והעסקאות יוסרו מהקישור (אבל לא יימחקו עצמם).')) return;
+    // הסרת השיוך מכל החברים והעסקאות
     await supabase.from('signed_owners').update({ family_group_id: null }).eq('family_group_id', familyId);
+    await supabase.from('partnership_deals').update({ family_group_id: null }).eq('family_group_id', familyId);
     // מחיקת הקבוצה
     const { error } = await supabase.from('family_groups').delete().eq('id', familyId);
     if (error) { alert('שגיאה: ' + error.message); return; }
@@ -2910,6 +3032,27 @@
     closeFamilyModal();
     await loadFamilies();
     openFamilyModal(familyId); // רענון המודאל
+  }
+
+  async function addDealsToFamily(dealIds, familyId) {
+    if (!dealIds || dealIds.length === 0) return;
+    const { error } = await supabase
+      .from('partnership_deals')
+      .update({ family_group_id: familyId })
+      .in('id', dealIds);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    closeFamilyModal();
+    await loadFamilies();
+    openFamilyModal(familyId);
+  }
+
+  async function removeDealFromFamily(dealId, familyId) {
+    if (!confirm('להסיר את העסקה מהקבוצה?')) return;
+    const { error } = await supabase.from('partnership_deals').update({ family_group_id: null }).eq('id', dealId);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    closeFamilyModal();
+    await loadFamilies();
+    openFamilyModal(familyId);
   }
 
   async function removeMemberFromFamily(memberId) {
