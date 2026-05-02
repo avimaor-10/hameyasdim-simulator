@@ -1671,22 +1671,33 @@
       }
     });
 
-    // הוספת הקצאות משפחתיות מקובצות לרשימה + חישוב נותר למשפחה
+    // הוספת הקצאות משפחתיות מקובצות לרשימה + חישוב נותר למשפחה (חתומים + עסקאות)
     Object.values(familyAllocsByKey).forEach(fa => {
       const lotId = fa.lot_id;
       if (!allocationsByLot[lotId]) allocationsByLot[lotId] = [];
 
-      // חישוב סטטיסטיקה למשפחה: סה"כ זכאות, הוקצה (כל המגרשים), נותר
+      // חישוב סטטיסטיקה למשפחה — כולל גם חתומים וגם עסקאות
       const familyMembers = allSignedOwners.filter(s => s.family_group_id === fa.family_id);
+      const familyDeals = allDeals.filter(d => d.family_group_id === fa.family_id);
       const memberIds = new Set(familyMembers.map(m => m.id));
-      const familyTotalArea = familyMembers.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
-      const familyAllocatedAll = allSignedAllocations
+      const dealIds = new Set(familyDeals.map(d => d.id));
+
+      const signersTotal = familyMembers.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
+      const dealsTotal = familyDeals.reduce((sum, d) => sum + (+d.area_sqm || 0), 0);
+      const familyTotalArea = signersTotal + dealsTotal;
+
+      const allocatedSigners = allSignedAllocations
         .filter(x => memberIds.has(x.signed_owner_id))
         .reduce((sum, x) => sum + (+x.allocated_area || 0), 0);
+      const allocatedDeals = allDealAllocations
+        .filter(x => dealIds.has(x.deal_id))
+        .reduce((sum, x) => sum + (+x.allocated_area || 0), 0);
+      const familyAllocatedAll = allocatedSigners + allocatedDeals;
+
       fa.family_total_area = familyTotalArea;
       fa.family_allocated_total = familyAllocatedAll;
       fa.family_remaining = familyTotalArea - familyAllocatedAll;
-      fa.member_count = familyMembers.length;
+      fa.member_count = familyMembers.length + familyDeals.length;
 
       // ממיינים את הפירוט
       fa.members_breakdown.sort((a, b) => b.area - a.area);
@@ -1698,9 +1709,47 @@
     });
 
     // 3) הקצאות מ-deal_lot_allocations (נדלן נדלן / דודי יצחקי)
+    // עסקאות עם family_allocation_id ושייכות למשפחה — מקובצות עם הקצאות החתומים תחת אותה משפחה
     allDealAllocations.forEach(a => {
       const deal = allDeals.find(d => d.id === a.deal_id);
       if (!deal) return;
+
+      // אם זו הקצאה משפחתית — מצרפים לקבוצה הקיימת (או יוצרים חדשה)
+      if (a.family_allocation_id && deal.family_group_id) {
+        const key = `${a.lot_id}:${deal.family_group_id}`;
+        if (!familyAllocsByKey[key]) {
+          const fg = allFamilies.find(f => f.id === deal.family_group_id);
+          familyAllocsByKey[key] = {
+            source: 'family',
+            family_name: fg ? fg.family_name : 'משפחה',
+            family_id: deal.family_group_id,
+            lot_id: a.lot_id,
+            allocation_id: `fam:${deal.family_group_id}:${a.lot_id}`,
+            area: 0,
+            member_count: 0,
+            members_breakdown: [],
+            transactions_count: new Set(),
+            allocation_type: a.allocation_type,
+          };
+        }
+        familyAllocsByKey[key].area += +a.allocated_area || 0;
+        familyAllocsByKey[key].transactions_count.add(a.family_allocation_id);
+        // עסקה כחבר בפירוט
+        const existingMember = familyAllocsByKey[key].members_breakdown.find(m => m.deal_id === deal.id);
+        if (existingMember) {
+          existingMember.area += +a.allocated_area || 0;
+        } else {
+          familyAllocsByKey[key].members_breakdown.push({
+            deal_id: deal.id,
+            name: `🏢 ${deal.deal_name}`,
+            parcel: deal.parcel,
+            area: +a.allocated_area || 0,
+          });
+        }
+        return;
+      }
+
+      // הקצאה עצמאית של עסקה (לא דרך משפחה)
       const sourceKey = deal.category === 'נדלן נדלן' ? 'nadlan' : 'yitzhaki';
       if (!allocationsByLot[a.lot_id]) allocationsByLot[a.lot_id] = [];
       allocationsByLot[a.lot_id].push({
@@ -1858,7 +1907,7 @@
     renderAdminMap();
   }
 
-  // ===== מחיקת הקצאה משפחתית מקובצת (כל ההקצאות של משפחה במגרש מסוים) =====
+  // ===== מחיקת הקצאה משפחתית מקובצת (חתומים + עסקאות באותו מגרש) =====
   async function deleteFamilyAllocation(compoundId) {
     // compoundId = "fam:<familyGroupId>:<lotId>"
     const parts = compoundId.split(':');
@@ -1866,20 +1915,42 @@
     const familyId = parts[1];
     const lotId = +parts[2];
 
-    if (!confirm(`למחוק את כל הקצאות המשפחה במגרש ${lotId}? פעולה זו תסיר את כל הרישומים הפרטניים של חברי המשפחה במגרש זה (כל הפעולות יחד).`)) return;
+    if (!confirm(`למחוק את כל הקצאות המשפחה במגרש ${lotId}? פעולה זו תסיר את כל הרישומים של חברי המשפחה (חתומים + עסקאות) במגרש זה.`)) return;
 
-    // מאתרים את כל ה-signed_owner_id ים השייכים למשפחה
     const memberIds = allSignedOwners
       .filter(s => s.family_group_id === familyId)
       .map(s => s.id);
-    if (memberIds.length === 0) { alert('לא נמצאו חברים במשפחה'); return; }
+    const dealIds = allDeals
+      .filter(d => d.family_group_id === familyId)
+      .map(d => d.id);
 
-    const { error } = await supabase.from('signed_owner_lot_allocations')
-      .delete()
-      .eq('lot_id', lotId)
-      .in('signed_owner_id', memberIds)
-      .not('family_allocation_id', 'is', null);
-    if (error) { alert('שגיאה: ' + error.message); return; }
+    const ops = [];
+
+    if (memberIds.length > 0) {
+      ops.push(
+        supabase.from('signed_owner_lot_allocations')
+          .delete()
+          .eq('lot_id', lotId)
+          .in('signed_owner_id', memberIds)
+          .not('family_allocation_id', 'is', null)
+      );
+    }
+    if (dealIds.length > 0) {
+      ops.push(
+        supabase.from('deal_lot_allocations')
+          .delete()
+          .eq('lot_id', lotId)
+          .in('deal_id', dealIds)
+          .not('family_allocation_id', 'is', null)
+      );
+    }
+
+    const results = await Promise.all(ops);
+    const errors = results.filter(r => r.error);
+    if (errors.length > 0) {
+      alert('שגיאה: ' + errors.map(e => e.error.message).join(', '));
+      return;
+    }
     await loadAllocations();
   }
 
@@ -2175,48 +2246,89 @@
       if (!confirm(`השטח שהוזן (${area} מ"ר) גדול מהנותר במגרש (${lotRemaining.toFixed(2)} מ"ר). להמשיך בכל זאת?`)) return;
     }
 
-    // === הקצאה מקבוצת משפחה (פיזור פרופורציונלי) ===
+    // === הקצאה מקבוצת משפחה (פיזור פרופורציונלי על חתומים + עסקאות) ===
     if (source === 'family') {
       const familyId = document.getElementById('alloc-family').value;
       if (!familyId) { alert('יש לבחור קבוצת משפחה'); return; }
 
       const family = allFamilies.find(f => f.id === familyId);
       const members = allSignedOwners.filter(s => s.family_group_id === familyId);
-      if (members.length === 0) { alert('אין חברים בקבוצה'); return; }
+      const memberDeals = allDeals.filter(d => d.family_group_id === familyId);
 
-      // חישוב שטח נותר לכל חבר (זכאות מינוס מה שכבר הוקצה)
-      const memberStats = members.map(m => {
+      if (members.length === 0 && memberDeals.length === 0) {
+        alert('אין חברים או עסקאות בקבוצה');
+        return;
+      }
+
+      // חישוב נותר לחתומים
+      const signerStats = members.map(m => {
         const used = allSignedAllocations
           .filter(a => a.signed_owner_id === m.id)
           .reduce((s, a) => s + (+a.allocated_area || 0), 0);
         const total = +m.agreement_area || 0;
-        return { member: m, available: Math.max(0, total - used) };
+        return { kind: 'signer', entity: m, available: Math.max(0, total - used) };
       }).filter(x => x.available > 0);
 
-      const totalAvailable = memberStats.reduce((s, x) => s + x.available, 0);
+      // חישוב נותר לעסקאות
+      const dealStats = memberDeals.map(d => {
+        const used = allDealAllocations
+          .filter(a => a.deal_id === d.id)
+          .reduce((s, a) => s + (+a.allocated_area || 0), 0);
+        const total = +d.area_sqm || 0;
+        return { kind: 'deal', entity: d, available: Math.max(0, total - used) };
+      }).filter(x => x.available > 0);
+
+      const allStats = [...signerStats, ...dealStats];
+      const totalAvailable = allStats.reduce((s, x) => s + x.available, 0);
+
       if (totalAvailable < area - 0.5) {
         if (!confirm(`השטח המבוקש (${area} מ"ר) גדול מהנותר בקבוצה (${totalAvailable.toFixed(2)} מ"ר). להמשיך בכל זאת? (הפיזור יחרוג)`)) return;
       }
 
-      // יצירת UUID משותף לכל ההקצאה הקולקטיבית
+      // UUID משותף לכל ההקצאה הקולקטיבית — מאחד גם בין חתומים וגם בין עסקאות
       const familyAllocId = crypto.randomUUID();
 
-      // פיזור פרופורציונלי: כל חבר מקבל (available_שלו / total_available) * area
-      const rows = memberStats.map(({ member, available }) => {
-        const proportion = available / totalAvailable;
-        const memberArea = area * proportion;
-        return {
-          signed_owner_id: member.id,
-          lot_id: lotId,
-          allocation_type: allocType,
-          allocated_area: Math.round(memberArea * 100) / 100,
-          notes: notes ? `${notes} | חלק מ-${family.family_name}` : `חלק מ-${family.family_name}`,
-          family_allocation_id: familyAllocId,
-        };
+      // פיזור פרופורציונלי
+      const signerRows = [];
+      const dealRows = [];
+      allStats.forEach(({ kind, entity, available }) => {
+        const proportion = totalAvailable > 0 ? available / totalAvailable : 0;
+        const itemArea = Math.round(area * proportion * 100) / 100;
+        if (itemArea < 0.01) return;
+        const noteSuffix = `חלק מ-${family.family_name}`;
+        const fullNotes = notes ? `${notes} | ${noteSuffix}` : noteSuffix;
+        if (kind === 'signer') {
+          signerRows.push({
+            signed_owner_id: entity.id,
+            lot_id: lotId,
+            allocation_type: allocType,
+            allocated_area: itemArea,
+            notes: fullNotes,
+            family_allocation_id: familyAllocId,
+          });
+        } else {
+          dealRows.push({
+            deal_id: entity.id,
+            lot_id: lotId,
+            allocation_type: allocType,
+            allocated_area: itemArea,
+            notes: fullNotes,
+            family_allocation_id: familyAllocId,
+          });
+        }
       });
 
-      const { error } = await supabase.from('signed_owner_lot_allocations').insert(rows);
-      if (error) { alert('שגיאה: ' + error.message); return; }
+      // שמירה — שתי הטבלאות במקביל
+      const ops = [];
+      if (signerRows.length > 0) ops.push(supabase.from('signed_owner_lot_allocations').insert(signerRows));
+      if (dealRows.length > 0)   ops.push(supabase.from('deal_lot_allocations').insert(dealRows));
+
+      const results = await Promise.all(ops);
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) {
+        alert('שגיאה בשמירה: ' + errors.map(e => e.error.message).join(', '));
+        return;
+      }
       closeAllocModal();
       await loadAllocations();
       return;
