@@ -939,6 +939,13 @@
         ${filtered.map(ps => {
           const coveragePct = Math.round(ps.coverage * 100);
 
+          // מקדם השתתפות החלקה + קיזוז עסקאות — מוצהר לפני בניית ה-HTML של הבעלים
+          const partFactor = getParcelParticipationFactor(ps.parcel.parcel);
+          const isPartial = partFactor < 0.999;
+          const factorPct = (partFactor * 100).toFixed(1);
+          const ownerDeductions = computeOwnerDeductionsForParcel(ps.parcel.parcel);
+          const hasDeductions = ownerDeductions.size > 0;
+
           const signersHtml = ps.signersStatus.length
             ? ps.signersStatus.map(x => {
                 const s = x.signer;
@@ -997,15 +1004,6 @@
                   </div>`;
               }).join('')
             : '<div class="no-owners" style="color:#9ca3af;text-align:center;padding:10px 0;">אין בעלים ברשימה שלנו בחלקה זו</div>';
-
-          // מקדם השתתפות החלקה (פרופורציונלי לכל בעליה)
-          const partFactor = getParcelParticipationFactor(ps.parcel.parcel);
-          const isPartial = partFactor < 0.999;
-          const factorPct = (partFactor * 100).toFixed(1);
-
-          // קיזוז עסקאות "ולא נרשמה" — בעלים מקוריים שכבר תרמו לעסקה
-          const ownerDeductions = computeOwnerDeductionsForParcel(ps.parcel.parcel);
-          const hasDeductions = ownerDeductions.size > 0;
 
           // סיכום שטחים — רשום (טאבו) ומשתתף (אחרי המקדם)
           const signedSigners = ps.signersStatus.filter(x => x.signer.is_signed !== false);
