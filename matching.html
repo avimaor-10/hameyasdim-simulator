@@ -652,6 +652,35 @@
     if (!p || !p.totalArea) return 1.0;
     return p.includedArea / p.totalArea;
   }
+
+  // ===== קיזוז כפילות עסקה ↔ בעלים מקוריים =====
+  // עבור חלקה מסוימת — מחזיר Map של (signed_owner_id → סך השטח שמוצא ממנו ע"י עסקאות "ולא נרשמה")
+  // הקיזוז פרופורציונלי: כשעסקה מחליפה כמה בעלים, השטח מתחלק לפי גודל הזכויות של כל אחד
+  function computeOwnerDeductionsForParcel(parcelNum) {
+    const deductions = new Map();
+    // עסקאות בחלקה זו שיש להן בעלים מקוריים מקושרים
+    const parcelDealsWithReplacement = allDeals.filter(d =>
+      d.parcel === parcelNum && dealReplacementsByDealId.has(d.id)
+    );
+    parcelDealsWithReplacement.forEach(deal => {
+      const replacedOwnerIds = dealReplacementsByDealId.get(deal.id) || [];
+      // רק בעלים שעדיין פעילים בחלקה זו
+      const replacedOwners = replacedOwnerIds
+        .map(oid => allSignedOwners.find(o => o.id === oid))
+        .filter(o => o && o.parcel === parcelNum);
+      if (replacedOwners.length === 0) return;
+      // חלוקה פרופורציונלית לפי שטח רשום של הבעלים
+      const totalRegistered = replacedOwners.reduce((s, o) => s + (Number(o.agreement_area) || 0), 0);
+      const dealArea = Number(deal.area_sqm) || 0;
+      replacedOwners.forEach(owner => {
+        const ownerRegistered = Number(owner.agreement_area) || 0;
+        const ownerShare = totalRegistered > 0 ? ownerRegistered / totalRegistered : 1 / replacedOwners.length;
+        const deduction = dealArea * ownerShare;
+        deductions.set(owner.id, (deductions.get(owner.id) || 0) + deduction);
+      });
+    });
+    return deductions;
+  }
   const PARCELS = [
     { parcel: 3,  totalArea: 2266,  includedArea: 2266 },
     { parcel: 5,  totalArea: 13794, includedArea: 13794 },
@@ -751,6 +780,10 @@
   let allDeals = [];             // עסקאות נדלן נדלן + דודי יצחקי
   let allDealAllocations = [];   // הקצאות עסקה למגרש (מאדמין)
   let allSignedAllocations = []; // הקצאות אדמין של חתום מקור למגרש
+  let allDealReplacedOwners = []; // קישור עסקה ↔ בעלים מקוריים (deal_replaced_owners)
+  // אינדקסים מהירים לקיזוז כפילות
+  let dealReplacementsByDealId = new Map();    // deal_id → [signed_owner_id, ...]
+  let dealReplacementsByOwnerId = new Map();   // signed_owner_id → [deal_id, ...]
   let profileByNormalizedId = new Map();  // ת"ז מנורמל → profile
   let selectionByUserId = new Map();      // user_id → selection
 
@@ -762,7 +795,7 @@
   }
 
   async function loadData() {
-    const [parcelsRes, profilesRes, selectionsRes, signedRes, dealsRes, dealAllocRes, signedAllocRes] = await Promise.all([
+    const [parcelsRes, profilesRes, selectionsRes, signedRes, dealsRes, dealAllocRes, signedAllocRes, dealReplacedRes] = await Promise.all([
       supabase.from('user_parcels').select('*'),
       supabase.from('profiles').select('id, full_name, email, phone, approval_status, id_number'),
       supabase.from('selections').select('*').eq('is_current', true),
@@ -770,6 +803,7 @@
       supabase.from('partnership_deals').select('*').eq('is_active', true),
       supabase.from('deal_lot_allocations').select('*'),
       supabase.from('signed_owner_lot_allocations').select('*'),
+      supabase.from('deal_replaced_owners').select('*'),
     ]);
 
     if (parcelsRes.error || profilesRes.error || signedRes.error) {
@@ -792,6 +826,17 @@
     allDeals = dealsRes.data || [];
     allDealAllocations = dealAllocRes.data || [];
     allSignedAllocations = signedAllocRes.data || [];
+
+    // קישור עסקה ↔ בעלים מקוריים — לקיזוז כפילות בסיכומים
+    allDealReplacedOwners = dealReplacedRes.data || [];
+    dealReplacementsByDealId = new Map();
+    dealReplacementsByOwnerId = new Map();
+    allDealReplacedOwners.forEach(r => {
+      if (!dealReplacementsByDealId.has(r.deal_id)) dealReplacementsByDealId.set(r.deal_id, []);
+      dealReplacementsByDealId.get(r.deal_id).push(r.signed_owner_id);
+      if (!dealReplacementsByOwnerId.has(r.signed_owner_id)) dealReplacementsByOwnerId.set(r.signed_owner_id, []);
+      dealReplacementsByOwnerId.get(r.signed_owner_id).push(r.deal_id);
+    });
 
     // טעינת בעלי זכויות מהטאבו (קובץ סטטי שנוצר על ידי parse_all_tabu.py)
     try {
@@ -908,15 +953,25 @@
                   ? '<span class="owner-type-tag joined">➕ הצטרף חדש</span>'
                   : '<span class="owner-type-tag signed">✓ חתום</span>';
 
-                // שטח הבעלים בחלקה — רשום (טאבו) ומשתתף (אחרי המקדם)
+                // שטח הבעלים בחלקה — רשום (טאבו), נטו (אחרי קיזוז עסקה), ומשתתף (אחרי המקדם)
                 const ownerAreaRegistered = s.agreement_area || s.plan_area || null;
                 const partFactorOwner = getParcelParticipationFactor(s.parcel);
-                const ownerAreaEffective = ownerAreaRegistered ? ownerAreaRegistered * partFactorOwner : null;
-                const areaText = ownerAreaEffective !== null
-                  ? (partFactorOwner < 0.999
-                      ? `<strong>${Math.round(ownerAreaEffective).toLocaleString('he-IL')}</strong> מ"ר <span style="color:var(--text-muted);font-size:0.72rem;">(רשום ${Math.round(ownerAreaRegistered).toLocaleString('he-IL')})</span>`
-                      : `${Math.round(ownerAreaEffective).toLocaleString('he-IL')} מ"ר`)
-                  : '';
+                const ownerDeduction = ownerDeductions.get(s.id) || 0;  // קיזוז מעסקאות שמחליפות
+                const ownerAreaNet = ownerAreaRegistered ? Math.max(0, ownerAreaRegistered - ownerDeduction) : null;
+                const ownerAreaEffective = ownerAreaNet !== null ? ownerAreaNet * partFactorOwner : null;
+                const isReplaced = ownerDeduction > 0.5;
+                let areaText = '';
+                if (ownerAreaEffective !== null) {
+                  if (isReplaced) {
+                    // בעלים שעסקה מחליפה אותו (חלקית/מלאה) — מציג נטו ומבהיר את הקיזוז
+                    const replacedTag = ` <span style="background:#fee2e2;color:#991b1b;padding:0 4px;border-radius:3px;font-size:0.7rem;">🔄 הומר לעסקה: -${Math.round(ownerDeduction).toLocaleString('he-IL')}</span>`;
+                    areaText = `<strong>${Math.round(ownerAreaEffective).toLocaleString('he-IL')}</strong> מ"ר${replacedTag}<br><span style="color:var(--text-muted);font-size:0.72rem;">רשום ${Math.round(ownerAreaRegistered).toLocaleString('he-IL')} − הומר ${Math.round(ownerDeduction).toLocaleString('he-IL')} = ${Math.round(ownerAreaNet).toLocaleString('he-IL')}${partFactorOwner < 0.999 ? ` × ${(partFactorOwner*100).toFixed(0)}%` : ''}</span>`;
+                  } else if (partFactorOwner < 0.999) {
+                    areaText = `<strong>${Math.round(ownerAreaEffective).toLocaleString('he-IL')}</strong> מ"ר <span style="color:var(--text-muted);font-size:0.72rem;">(רשום ${Math.round(ownerAreaRegistered).toLocaleString('he-IL')})</span>`;
+                  } else {
+                    areaText = `${Math.round(ownerAreaEffective).toLocaleString('he-IL')} מ"ר`;
+                  }
+                }
 
                 // אם המשתמש שנרשם עם הת"ז הזו הוא בשם שונה מהחתום — להציג אזהרה
                 const profileName = x.profile ? x.profile.full_name : null;
@@ -948,14 +1003,30 @@
           const isPartial = partFactor < 0.999;
           const factorPct = (partFactor * 100).toFixed(1);
 
+          // קיזוז עסקאות "ולא נרשמה" — בעלים מקוריים שכבר תרמו לעסקה
+          const ownerDeductions = computeOwnerDeductionsForParcel(ps.parcel.parcel);
+          const hasDeductions = ownerDeductions.size > 0;
+
           // סיכום שטחים — רשום (טאבו) ומשתתף (אחרי המקדם)
           const signedSigners = ps.signersStatus.filter(x => x.signer.is_signed !== false);
           const joinedSigners = ps.signersStatus.filter(x => x.signer.is_signed === false);
+          // שטח רשום ברוטו (לפני קיזוז) — לתצוגת רקע בלבד
           const totalSignedAreaRegistered = signedSigners.reduce((sum, x) => sum + Number(x.signer.agreement_area || x.signer.plan_area || 0), 0);
           const totalJoinedAreaRegistered = joinedSigners.reduce((sum, x) => sum + Number(x.signer.agreement_area || x.signer.plan_area || 0), 0);
+          // שטח רשום נטו (אחרי קיזוז עסקאות שמחליפות) — זה מה שנכנס לחישוב המשתתף
+          const totalSignedAreaRegisteredNet = signedSigners.reduce((sum, x) => {
+            const stored = Number(x.signer.agreement_area || x.signer.plan_area || 0);
+            const ded = ownerDeductions.get(x.signer.id) || 0;
+            return sum + Math.max(0, stored - ded);
+          }, 0);
+          const totalJoinedAreaRegisteredNet = joinedSigners.reduce((sum, x) => {
+            const stored = Number(x.signer.agreement_area || x.signer.plan_area || 0);
+            const ded = ownerDeductions.get(x.signer.id) || 0;
+            return sum + Math.max(0, stored - ded);
+          }, 0);
           // הסכום המשתתף בהקצאה — אחרי המקדם
-          const totalSignedArea = totalSignedAreaRegistered * partFactor;
-          const totalJoinedArea = totalJoinedAreaRegistered * partFactor;
+          const totalSignedArea = totalSignedAreaRegisteredNet * partFactor;
+          const totalJoinedArea = totalJoinedAreaRegisteredNet * partFactor;
           const signedCount = signedSigners.length;
           const joinedCount = joinedSigners.length;
 
@@ -1029,6 +1100,7 @@
                     <div style="font-size:0.74rem;color:var(--text-muted);margin-top:2px;">
                       חתומים: ${Math.round(totalSignedArea).toLocaleString('he-IL')}${parcelDeals.length > 0 ? ` · עסקאות: ${Math.round(totalDealsArea).toLocaleString('he-IL')}` : ''}${joinedCount > 0 ? ` · הצטרפו חדש: ${Math.round(totalJoinedArea).toLocaleString('he-IL')}` : ''}
                     </div>
+                    ${hasDeductions ? `<div style="font-size:0.72rem;color:#7c2d12;margin-top:3px;background:#fff7ed;border-right:3px solid #f97316;padding:3px 6px;border-radius:3px;">🔄 קוזזו ${Math.round([...ownerDeductions.values()].reduce((s,v)=>s+v,0)).toLocaleString('he-IL')} מ"ר מבעלים שעסקה כבר רכשה את הקרקע שלהם (טרם נרשמה בטאבו)</div>` : ''}
                     ${isPartial ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;font-style:italic;">רשום בטאבו: ${Math.round(totalSignedAreaRegistered + totalDealsAreaRegistered).toLocaleString('he-IL')} מ"ר × ${factorPct}% השתתפות</div>` : ''}
                   </div>
                 </div>
