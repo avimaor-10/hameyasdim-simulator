@@ -1604,6 +1604,10 @@
   let allFamilies = [];        // קבוצות משפחה מ-family_groups
   let allParcelsMeta = [];     // מידע על חלקות מקור — שטח רשום, נכלל, מקדם השתתפות
   let parcelsMetaByParcel = {}; // אינדקס מהיר: parcel -> meta record
+  // קישור עסקה ↔ בעלים מקוריים (לקיזוז כפילות בסיכומים)
+  let allDealReplacedOwners = [];
+  let dealReplacementsByDealId = new Map();   // deal_id → [signed_owner_id, ...]
+  let dealReplacementsByOwnerId = new Map();  // signed_owner_id → [deal_id, ...]
   // allocationsByLot: lot_id -> [{source, owner_name, area, ...}]
   let allocationsByLot = {};
 
@@ -1689,11 +1693,37 @@
     return parseFloat(meta.participation_factor) || 1.0;
   }
 
+  // קיזוז עסקאות "ולא נרשמה" — מחזיר כמה מ"ר רשום מהבעלים כבר הומר לעסקאות
+  function getOwnerRegisteredDeduction(owner) {
+    if (!owner) return 0;
+    const dealIds = dealReplacementsByOwnerId.get(owner.id) || [];
+    if (dealIds.length === 0) return 0;
+    let total = 0;
+    dealIds.forEach(dealId => {
+      const deal = allDeals.find(d => d.id === dealId);
+      if (!deal || deal.parcel !== owner.parcel) return;
+      // כל הבעלים שעסקה זו מחליפה (באותה חלקה)
+      const replacedOwnerIds = dealReplacementsByDealId.get(dealId) || [];
+      const replacedOwners = replacedOwnerIds
+        .map(oid => allSignedOwners.find(o => o.id === oid))
+        .filter(o => o && o.parcel === deal.parcel);
+      if (replacedOwners.length === 0) return;
+      const totalRegistered = replacedOwners.reduce((s, o) => s + (parseFloat(o.agreement_area) || 0), 0);
+      const ownerRegistered = parseFloat(owner.agreement_area) || 0;
+      const ownerShare = totalRegistered > 0 ? ownerRegistered / totalRegistered : 1 / replacedOwners.length;
+      total += (parseFloat(deal.area_sqm) || 0) * ownerShare;
+    });
+    return total;
+  }
+
   // השטח המשתתף בהקצאה לבעלים חתום בודד (אחרי הצמצום)
+  // = (שטח רשום − שטח שהומר לעסקה) × מקדם השתתפות
   function getOwnerEffectiveArea(owner) {
     if (!owner) return 0;
     const stored = parseFloat(owner.agreement_area) || parseFloat(owner.unification_area) || 0;
-    return stored * getParcelFactor(owner.parcel);
+    const deduction = getOwnerRegisteredDeduction(owner);
+    const netRegistered = Math.max(0, stored - deduction);
+    return netRegistered * getParcelFactor(owner.parcel);
   }
 
   // השטח המשתתף בהקצאה לעסקה (אחרי הצמצום)
@@ -1722,7 +1752,7 @@
     const grid = document.getElementById('lots-grid');
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;"><div class="spinner"></div><div style="margin-top:8px;">טוען...</div></div>`;
 
-    const [dealsRes, dealAllocRes, selsRes, signedRes, signedAllocRes, famRes, parcelsMetaRes] = await Promise.all([
+    const [dealsRes, dealAllocRes, selsRes, signedRes, signedAllocRes, famRes, parcelsMetaRes, dealReplacedRes] = await Promise.all([
       supabase.from('partnership_deals').select('*').eq('is_active', true).order('deal_number'),
       supabase.from('deal_lot_allocations').select('*'),
       supabase.from('selections').select('*').eq('is_current', true),
@@ -1730,6 +1760,7 @@
       supabase.from('signed_owner_lot_allocations').select('*'),
       supabase.from('family_groups').select('*').eq('is_active', true).order('family_name'),
       supabase.from('parcels_meta').select('*').order('parcel'),
+      supabase.from('deal_replaced_owners').select('*'),
     ]);
     allFamilies = famRes.data || [];
 
@@ -1737,6 +1768,17 @@
     allParcelsMeta = parcelsMetaRes.data || [];
     parcelsMetaByParcel = {};
     allParcelsMeta.forEach(p => { parcelsMetaByParcel[p.parcel] = p; });
+
+    // קישורי עסקה-לבעלים (לקיזוז כפילות בסיכום שטחים)
+    allDealReplacedOwners = dealReplacedRes.data || [];
+    dealReplacementsByDealId = new Map();
+    dealReplacementsByOwnerId = new Map();
+    allDealReplacedOwners.forEach(r => {
+      if (!dealReplacementsByDealId.has(r.deal_id)) dealReplacementsByDealId.set(r.deal_id, []);
+      dealReplacementsByDealId.get(r.deal_id).push(r.signed_owner_id);
+      if (!dealReplacementsByOwnerId.has(r.signed_owner_id)) dealReplacementsByOwnerId.set(r.signed_owner_id, []);
+      dealReplacementsByOwnerId.get(r.signed_owner_id).push(r.deal_id);
+    });
 
     if (dealsRes.error) {
       grid.innerHTML = `<div style="grid-column:1/-1;color:#dc2626;text-align:center;padding:30px;">שגיאה: ${dealsRes.error.message}</div>`;
@@ -3163,13 +3205,14 @@
     const list = document.getElementById('families-list');
     list.innerHTML = `<div style="text-align:center;padding:30px;"><div class="spinner"></div></div>`;
 
-    const [famRes, signedRes, allocRes, dealsRes, dealAllocRes, parcelsMetaRes] = await Promise.all([
+    const [famRes, signedRes, allocRes, dealsRes, dealAllocRes, parcelsMetaRes, dealReplacedRes] = await Promise.all([
       supabase.from('family_groups').select('*').eq('is_active', true).order('family_name'),
       supabase.from('signed_owners').select('*').eq('is_active', true),
       supabase.from('signed_owner_lot_allocations').select('signed_owner_id, allocated_area'),
       supabase.from('partnership_deals').select('*').eq('is_active', true),
       supabase.from('deal_lot_allocations').select('deal_id, allocated_area'),
       supabase.from('parcels_meta').select('*').order('parcel'),
+      supabase.from('deal_replaced_owners').select('*'),
     ]);
 
     if (famRes.error) {
@@ -3181,6 +3224,17 @@
     allParcelsMeta = parcelsMetaRes.data || [];
     parcelsMetaByParcel = {};
     allParcelsMeta.forEach(p => { parcelsMetaByParcel[p.parcel] = p; });
+
+    // קישורי עסקה-לבעלים (לקיזוז כפילות בסיכום שטחים)
+    allDealReplacedOwners = dealReplacedRes.data || [];
+    dealReplacementsByDealId = new Map();
+    dealReplacementsByOwnerId = new Map();
+    allDealReplacedOwners.forEach(r => {
+      if (!dealReplacementsByDealId.has(r.deal_id)) dealReplacementsByDealId.set(r.deal_id, []);
+      dealReplacementsByDealId.get(r.deal_id).push(r.signed_owner_id);
+      if (!dealReplacementsByOwnerId.has(r.signed_owner_id)) dealReplacementsByOwnerId.set(r.signed_owner_id, []);
+      dealReplacementsByOwnerId.get(r.signed_owner_id).push(r.deal_id);
+    });
 
     allFamilies = famRes.data || [];
     allSignedOwners = signedRes.data || [];
