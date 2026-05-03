@@ -2892,18 +2892,18 @@
       circ.setAttribute('cy', pos.y);
       circ.setAttribute('r', '1.4');
       // אם יש צבע קבוצה — דורסים את הצבע של ה-CSS לפי סטטוס
+      // משתמשים ב-style כדי לקבל עדיפות גבוהה יותר מ-class CSS
       if (groupColor) {
-        circ.setAttribute('fill', groupColor);
-        // קו מתאר כהה יותר לקריאות
-        circ.setAttribute('stroke', '#1e293b');
-        circ.setAttribute('stroke-width', '0.25');
+        circ.style.fill = groupColor;
+        circ.style.stroke = '#1e293b';
+        circ.style.strokeWidth = '0.25';
       }
 
       const txt = document.createElementNS(SVG_NS, 'text');
       txt.setAttribute('x', pos.x);
       txt.setAttribute('y', pos.y);
       if (groupColor) {
-        txt.setAttribute('fill', getContrastTextColor(groupColor));
+        txt.style.fill = getContrastTextColor(groupColor);
       }
       txt.textContent = lot.id;
 
