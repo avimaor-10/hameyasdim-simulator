@@ -1602,6 +1602,8 @@
   let allSignedOwners = [];    // כל הבעלים החתומים מ-signed_owners
   let allSignedAllocations = []; // הקצאות אדמין מ-signed_owner_lot_allocations
   let allFamilies = [];        // קבוצות משפחה מ-family_groups
+  let allParcelsMeta = [];     // מידע על חלקות מקור — שטח רשום, נכלל, מקדם השתתפות
+  let parcelsMetaByParcel = {}; // אינדקס מהיר: parcel -> meta record
   // allocationsByLot: lot_id -> [{source, owner_name, area, ...}]
   let allocationsByLot = {};
 
@@ -1672,6 +1674,35 @@
     return luminance > 0.6 ? '#111827' : '#ffffff';
   }
 
+  // ===== עזרי שטח משתתף (Effective Area) =====
+  // לפי נספח א' של השמאי: חלקות מסוימות משתתפות באיחוד חלקית
+  // השטח המשתתף בהקצאה = שטח רשום × מקדם החלקה
+
+  function getParcelMeta(parcelNum) {
+    return parcelsMetaByParcel[parcelNum] || null;
+  }
+
+  // מקדם השתתפות (1.0 אם החלקה לא מופיעה ב-meta — ברירת מחדל בטוחה)
+  function getParcelFactor(parcelNum) {
+    const meta = getParcelMeta(parcelNum);
+    if (!meta) return 1.0;
+    return parseFloat(meta.participation_factor) || 1.0;
+  }
+
+  // השטח המשתתף בהקצאה לבעלים חתום בודד (אחרי הצמצום)
+  function getOwnerEffectiveArea(owner) {
+    if (!owner) return 0;
+    const stored = parseFloat(owner.agreement_area) || parseFloat(owner.unification_area) || 0;
+    return stored * getParcelFactor(owner.parcel);
+  }
+
+  // השטח המשתתף בהקצאה לעסקה (אחרי הצמצום)
+  function getDealEffectiveArea(deal) {
+    if (!deal) return 0;
+    const stored = parseFloat(deal.area_sqm) || 0;
+    return stored * getParcelFactor(deal.parcel);
+  }
+
   // ===== מעבר בין טאבים =====
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1691,15 +1722,21 @@
     const grid = document.getElementById('lots-grid');
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;"><div class="spinner"></div><div style="margin-top:8px;">טוען...</div></div>`;
 
-    const [dealsRes, dealAllocRes, selsRes, signedRes, signedAllocRes, famRes] = await Promise.all([
+    const [dealsRes, dealAllocRes, selsRes, signedRes, signedAllocRes, famRes, parcelsMetaRes] = await Promise.all([
       supabase.from('partnership_deals').select('*').eq('is_active', true).order('deal_number'),
       supabase.from('deal_lot_allocations').select('*'),
       supabase.from('selections').select('*').eq('is_current', true),
       supabase.from('signed_owners').select('*').eq('is_active', true).order('owner_name'),
       supabase.from('signed_owner_lot_allocations').select('*'),
       supabase.from('family_groups').select('*').eq('is_active', true).order('family_name'),
+      supabase.from('parcels_meta').select('*').order('parcel'),
     ]);
     allFamilies = famRes.data || [];
+
+    // עדכון אינדקס החלקות (גם אם הטבלה עדיין לא קיימת — נופל בעדינות)
+    allParcelsMeta = parcelsMetaRes.data || [];
+    parcelsMetaByParcel = {};
+    allParcelsMeta.forEach(p => { parcelsMetaByParcel[p.parcel] = p; });
 
     if (dealsRes.error) {
       grid.innerHTML = `<div style="grid-column:1/-1;color:#dc2626;text-align:center;padding:30px;">שגיאה: ${dealsRes.error.message}</div>`;
@@ -1780,7 +1817,8 @@
         }
       } else {
         // הקצאת אדמין רגילה (חתום בודד) — חישוב נותר לבעלים
-        const ownerTotalArea = +owner.agreement_area || +owner.unification_area || 0;
+        // ownerTotalArea = שטח משתתף בהקצאה (אחרי מקדם השמאי)
+        const ownerTotalArea = getOwnerEffectiveArea(owner);
         const ownerAllocated = allSignedAllocations
           .filter(x => x.signed_owner_id === owner.id)
           .reduce((sum, x) => sum + (+x.allocated_area || 0), 0);
@@ -1917,8 +1955,9 @@
       const memberIds = new Set(familyMembers.map(m => m.id));
       const dealIds = new Set(familyDeals.map(d => d.id));
 
-      const signersTotal = familyMembers.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
-      const dealsTotal = familyDeals.reduce((sum, d) => sum + (+d.area_sqm || 0), 0);
+      // שטח משתתף בלבד — אחרי מקדם השמאי לכל חלקה
+      const signersTotal = familyMembers.reduce((sum, m) => sum + getOwnerEffectiveArea(m), 0);
+      const dealsTotal = familyDeals.reduce((sum, d) => sum + getDealEffectiveArea(d), 0);
       const familyTotalArea = signersTotal + dealsTotal;
 
       const allocatedSigners = allSignedAllocations
@@ -2197,9 +2236,11 @@
     const allocTypeLabel = allocType === 'שכירות' ? '🔑 שכירות' : '🏠 בעלות';
 
     // עסקאות זמינות לפי קטגוריה (נדלן נדלן + דודי יצחקי) — שטח שעוד לא הוקצה
+    // שטח עסקה = שטח משתתף (אחרי מקדם השמאי)
     const availableDeals = allDeals.map(d => {
       const usedArea = allDealAllocations.filter(a => a.deal_id === d.id).reduce((s, a) => s + (+a.allocated_area || 0), 0);
-      return { ...d, used_area: usedArea, remaining_area: (+d.area_sqm || 0) - usedArea };
+      const effectiveArea = getDealEffectiveArea(d);
+      return { ...d, used_area: usedArea, remaining_area: effectiveArea - usedArea, effective_area: effectiveArea };
     }).filter(d => d.remaining_area > 0.5);
 
     // תגי זכויות לכותרת המודאל
@@ -2313,11 +2354,11 @@
         signedInfo.textContent = '';
         signedIdHidden.value = '';
       } else if (v === 'family') {
-        // מציג רק משפחות עם נותר זמין לשיבוץ
+        // מציג רק משפחות עם נותר זמין לשיבוץ — שטח משתתף בלבד
         const familiesWithStats = allFamilies.map(fg => {
           const members = allSignedOwners.filter(s => s.family_group_id === fg.id);
           const memberIds = new Set(members.map(m => m.id));
-          const totalArea = members.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
+          const totalArea = members.reduce((sum, m) => sum + getOwnerEffectiveArea(m), 0);
           const allocatedArea = allSignedAllocations
             .filter(a => memberIds.has(a.signed_owner_id))
             .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
@@ -2340,18 +2381,18 @@
       if (!fg) { familyInfo.textContent = ''; return; }
       const members = allSignedOwners.filter(s => s.family_group_id === fg.id);
       const memberIds = new Set(members.map(m => m.id));
-      const totalArea = members.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
+      const totalArea = members.reduce((sum, m) => sum + getOwnerEffectiveArea(m), 0);
       const allocatedArea = allSignedAllocations
         .filter(a => memberIds.has(a.signed_owner_id))
         .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
       const remaining = totalArea - allocatedArea;
-      familyInfo.innerHTML = `<strong>${members.length} חברים</strong> · סה"כ זכאות: ${totalArea.toFixed(0)} מ"ר · הוקצה: ${allocatedArea.toFixed(0)} · <strong style="color:var(--success);">נותר: ${remaining.toFixed(0)}</strong>`;
+      familyInfo.innerHTML = `<strong>${members.length} חברים</strong> · סה"כ שטח משתתף: ${totalArea.toFixed(0)} מ"ר · הוקצה: ${allocatedArea.toFixed(0)} · <strong style="color:var(--success);">נותר: ${remaining.toFixed(0)}</strong>`;
     });
 
     dealSel.addEventListener('change', () => {
       const deal = availableDeals.find(d => d.id === dealSel.value);
       if (!deal) { dealInfo.textContent = ''; return; }
-      dealInfo.textContent = `סטטוס: ${deal.status} · סה"כ עסקה: ${(+deal.area_sqm).toFixed(2)} מ"ר · הוקצה: ${deal.used_area.toFixed(2)} · נותר: ${deal.remaining_area.toFixed(2)}`;
+      dealInfo.textContent = `סטטוס: ${deal.status} · שטח משתתף: ${deal.effective_area.toFixed(2)} מ"ר · הוקצה: ${deal.used_area.toFixed(2)} · נותר: ${deal.remaining_area.toFixed(2)}`;
     });
 
     const signedStatus = document.getElementById('alloc-signed-status');
@@ -2363,9 +2404,16 @@
       signedList.style.display = 'none';
       const usedArea = allSignedAllocations.filter(a => a.signed_owner_id === owner.id)
         .reduce((s, a) => s + (+a.allocated_area || 0), 0);
-      const totalArea = +owner.agreement_area || +owner.unification_area || 0;
+      const registeredArea = parseFloat(owner.agreement_area) || parseFloat(owner.unification_area) || 0;
+      const totalArea = getOwnerEffectiveArea(owner);
       const rem = totalArea - usedArea;
-      signedInfo.textContent = `סה"כ זכאות: ${totalArea.toFixed(0)} מ"ר · הוקצה כבר: ${usedArea.toFixed(0)} · נותר: ${rem.toFixed(0)}`;
+      const factor = getParcelFactor(owner.parcel);
+      const factorPct = (factor * 100).toFixed(1);
+      // אם החלקה חלקית — מציגים שורה של רשום + משתתף; אחרת רק משתתף
+      const factorHint = factor < 0.999
+        ? ` <span style="color:var(--text-muted);font-size:0.78rem;">(רשום: ${registeredArea.toFixed(0)} מ"ר × ${factorPct}% השתתפות)</span>`
+        : '';
+      signedInfo.innerHTML = `סה"כ שטח משתתף: <strong>${totalArea.toFixed(0)} מ"ר</strong>${factorHint} · הוקצה כבר: ${usedArea.toFixed(0)} · נותר: <strong style="color:var(--success);">${rem.toFixed(0)}</strong>`;
       signedStatus.innerHTML = `<span style="color:var(--success);">✓ נבחר: ${owner.owner_name}</span>`;
     }
 
@@ -2403,11 +2451,15 @@
         signedList.innerHTML = matches.map(o => {
           const usedArea = allSignedAllocations.filter(a => a.signed_owner_id === o.id)
             .reduce((s, a) => s + (+a.allocated_area || 0), 0);
-          const totalArea = +o.agreement_area || +o.unification_area || 0;
+          const totalArea = getOwnerEffectiveArea(o);
           const rem = totalArea - usedArea;
+          const factor = getParcelFactor(o.parcel);
+          const partialBadge = factor < 0.999
+            ? ` <span style="background:#fef3c7;color:#92400e;padding:0 4px;border-radius:3px;font-size:0.7rem;">חלקית ${(factor*100).toFixed(0)}%</span>`
+            : '';
           return `<div class="signed-pick" data-id="${o.id}" style="padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.87rem;">
-            <strong>${o.owner_name}</strong> · ת.ז. ${o.id_number || '-'} · חלקה ${o.parcel}
-            <div style="font-size:0.78rem;color:var(--text-muted);">סה"כ זכאות: ${totalArea.toFixed(0)} מ"ר · הוקצה כבר: ${usedArea.toFixed(0)} · נותר: ${rem.toFixed(0)}</div>
+            <strong>${o.owner_name}</strong> · ת.ז. ${o.id_number || '-'} · חלקה ${o.parcel}${partialBadge}
+            <div style="font-size:0.78rem;color:var(--text-muted);">שטח משתתף: ${totalArea.toFixed(0)} מ"ר · הוקצה: ${usedArea.toFixed(0)} · נותר: ${rem.toFixed(0)}</div>
           </div>`;
         }).join('');
 
@@ -2472,21 +2524,21 @@
         return;
       }
 
-      // חישוב נותר לחתומים
+      // חישוב נותר לחתומים — שטח משתתף בלבד
       const signerStats = members.map(m => {
         const used = allSignedAllocations
           .filter(a => a.signed_owner_id === m.id)
           .reduce((s, a) => s + (+a.allocated_area || 0), 0);
-        const total = +m.agreement_area || 0;
+        const total = getOwnerEffectiveArea(m);
         return { kind: 'signer', entity: m, available: Math.max(0, total - used) };
       }).filter(x => x.available > 0);
 
-      // חישוב נותר לעסקאות
+      // חישוב נותר לעסקאות — שטח משתתף בלבד
       const dealStats = memberDeals.map(d => {
         const used = allDealAllocations
           .filter(a => a.deal_id === d.id)
           .reduce((s, a) => s + (+a.allocated_area || 0), 0);
-        const total = +d.area_sqm || 0;
+        const total = getDealEffectiveArea(d);
         return { kind: 'deal', entity: d, available: Math.max(0, total - used) };
       }).filter(x => x.available > 0);
 
@@ -2551,14 +2603,14 @@
       const signedOwnerId = document.getElementById('alloc-signed-id').value;
       if (!signedOwnerId) { alert('יש לבחור בעלים חתום מהרשימה'); return; }
 
-      // בדיקה שלא חורגים מהזכאות של הבעלים
+      // בדיקה שלא חורגים מהשטח המשתתף של הבעלים
       const owner = allSignedOwners.find(o => o.id === signedOwnerId);
       const usedArea = allSignedAllocations.filter(a => a.signed_owner_id === signedOwnerId)
         .reduce((s, a) => s + (+a.allocated_area || 0), 0);
-      const totalArea = +owner.agreement_area || +owner.unification_area || 0;
+      const totalArea = getOwnerEffectiveArea(owner);
       const ownerRemaining = totalArea - usedArea;
       if (totalArea > 0 && area > ownerRemaining + 0.5) {
-        if (!confirm(`השטח חורג מהזכאות הנותרת של הבעלים (${ownerRemaining.toFixed(2)} מ"ר). להמשיך?`)) return;
+        if (!confirm(`השטח חורג מהשטח המשתתף הנותר של הבעלים (${ownerRemaining.toFixed(2)} מ"ר). להמשיך?`)) return;
       }
 
       const { error } = await supabase.from('signed_owner_lot_allocations').insert({
@@ -2586,7 +2638,7 @@
         const used = allDealAllocations
           .filter(a => a.deal_id === d.id)
           .reduce((s, a) => s + (+a.allocated_area || 0), 0);
-        return { deal: d, available: Math.max(0, (+d.area_sqm || 0) - used) };
+        return { deal: d, available: Math.max(0, getDealEffectiveArea(d) - used) };
       }).filter(x => x.available > 0);
 
       const totalAvailable = dealStats.reduce((s, x) => s + x.available, 0);
@@ -2627,9 +2679,9 @@
     // === עסקה בודדת ===
     const deal = allDeals.find(d => d.id === dealId);
     const usedArea = allDealAllocations.filter(a => a.deal_id === dealId).reduce((s, a) => s + (+a.allocated_area || 0), 0);
-    const dealRemaining = (+deal.area_sqm || 0) - usedArea;
+    const dealRemaining = getDealEffectiveArea(deal) - usedArea;
     if (area > dealRemaining + 0.5) {
-      alert(`❌ השטח חורג מהנותר בעסקה (${dealRemaining.toFixed(2)} מ"ר)`);
+      alert(`❌ השטח חורג מהשטח המשתתף הנותר בעסקה (${dealRemaining.toFixed(2)} מ"ר)`);
       return;
     }
 
@@ -3111,18 +3163,24 @@
     const list = document.getElementById('families-list');
     list.innerHTML = `<div style="text-align:center;padding:30px;"><div class="spinner"></div></div>`;
 
-    const [famRes, signedRes, allocRes, dealsRes, dealAllocRes] = await Promise.all([
+    const [famRes, signedRes, allocRes, dealsRes, dealAllocRes, parcelsMetaRes] = await Promise.all([
       supabase.from('family_groups').select('*').eq('is_active', true).order('family_name'),
       supabase.from('signed_owners').select('*').eq('is_active', true),
       supabase.from('signed_owner_lot_allocations').select('signed_owner_id, allocated_area'),
       supabase.from('partnership_deals').select('*').eq('is_active', true),
       supabase.from('deal_lot_allocations').select('deal_id, allocated_area'),
+      supabase.from('parcels_meta').select('*').order('parcel'),
     ]);
 
     if (famRes.error) {
       list.innerHTML = `<div style="color:#dc2626;text-align:center;padding:30px;">שגיאה: ${famRes.error.message}</div>`;
       return;
     }
+
+    // עדכון אינדקס החלקות לפונקציות העזר (גם אם הטבלה עוד לא קיימת)
+    allParcelsMeta = parcelsMetaRes.data || [];
+    parcelsMetaByParcel = {};
+    allParcelsMeta.forEach(p => { parcelsMetaByParcel[p.parcel] = p; });
 
     allFamilies = famRes.data || [];
     allSignedOwners = signedRes.data || [];
@@ -3137,8 +3195,9 @@
       const signerIds = new Set(memberSigners.map(m => m.id));
       const dealIds = new Set(memberDeals.map(d => d.id));
 
-      const signersArea = memberSigners.reduce((sum, m) => sum + (+m.agreement_area || 0), 0);
-      const dealsArea = memberDeals.reduce((sum, d) => sum + (+d.area_sqm || 0), 0);
+      // שטח משתתף בלבד — אחרי מקדם השמאי
+      const signersArea = memberSigners.reduce((sum, m) => sum + getOwnerEffectiveArea(m), 0);
+      const dealsArea = memberDeals.reduce((sum, d) => sum + getDealEffectiveArea(d), 0);
       const totalArea = signersArea + dealsArea;
 
       const allocatedSignersArea = allocs
@@ -3275,7 +3334,7 @@
           ${(members.length + memberDeals.length) === 0 ? '<div style="color:#9ca3af;padding:10px;">אין חברים עדיין</div>' : ''}
           ${members.map(m => `
             <div style="display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--border);">
-              <span><span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;font-size:0.72rem;font-weight:600;margin-left:4px;">🔵 חתום</span><strong>${m.owner_name}</strong> · ת.ז. ${m.id_number || '-'} · חלקה ${m.parcel} · ${fmtSqm(m.agreement_area || 0)}</span>
+              <span><span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;font-size:0.72rem;font-weight:600;margin-left:4px;">🔵 חתום</span><strong>${m.owner_name}</strong> · ת.ז. ${m.id_number || '-'} · חלקה ${m.parcel} · ${fmtSqm(getOwnerEffectiveArea(m))}${getParcelFactor(m.parcel) < 0.999 ? ` <span style="color:#92400e;font-size:0.72rem;">(רשום ${fmtSqm(parseFloat(m.agreement_area) || 0)})</span>` : ''}</span>
               <button class="btn-sm btn-reject" data-action="rm-member" data-id="${m.id}" style="padding:1px 8px;font-size:0.7rem;">✗ הסר</button>
             </div>
           `).join('')}
@@ -3285,7 +3344,7 @@
               : '<span style="background:#e9d5ff;color:#6b21a8;padding:1px 5px;border-radius:3px;font-size:0.72rem;font-weight:600;margin-left:4px;">👤 דודי יצחקי</span>';
             return `
               <div style="display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--border);">
-                <span>${catBadge}<strong>${d.deal_name}</strong> · חלקה ${d.parcel} · ${fmtSqm(d.area_sqm || 0)}</span>
+                <span>${catBadge}<strong>${d.deal_name}</strong> · חלקה ${d.parcel} · ${fmtSqm(getDealEffectiveArea(d))}${getParcelFactor(d.parcel) < 0.999 ? ` <span style="color:#92400e;font-size:0.72rem;">(רשום ${fmtSqm(parseFloat(d.area_sqm) || 0)})</span>` : ''}</span>
                 <button class="btn-sm btn-reject" data-action="rm-deal" data-id="${d.id}" style="padding:1px 8px;font-size:0.7rem;">✗ הסר</button>
               </div>
             `;
@@ -3368,7 +3427,7 @@
               return `
                 <label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);font-size:0.87rem;cursor:pointer;">
                   <input type="checkbox" class="fam-deal-check" value="${d.id}" style="cursor:pointer;flex-shrink:0;">
-                  <span>${catBadge} <strong>${d.deal_name}</strong> · חלקה ${d.parcel} · ${fmtSqm(d.area_sqm || 0)}</span>
+                  <span>${catBadge} <strong>${d.deal_name}</strong> · חלקה ${d.parcel} · ${fmtSqm(getDealEffectiveArea(d))}${getParcelFactor(d.parcel) < 0.999 ? ` <span style="color:#92400e;font-size:0.72rem;">(רשום ${fmtSqm(parseFloat(d.area_sqm) || 0)})</span>` : ''}</span>
                 </label>
               `;
             }).join('')}
@@ -3431,7 +3490,7 @@
             ${matches.map(o => `
               <label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);font-size:0.87rem;cursor:pointer;">
                 <input type="checkbox" class="fam-member-check" value="${o.id}" style="cursor:pointer;flex-shrink:0;">
-                <span><strong>${o.owner_name}</strong> · ת.ז. ${o.id_number || '-'} · חלקה ${o.parcel} · ${fmtSqm(o.agreement_area || 0)}</span>
+                <span><strong>${o.owner_name}</strong> · ת.ז. ${o.id_number || '-'} · חלקה ${o.parcel} · ${fmtSqm(getOwnerEffectiveArea(o))}${getParcelFactor(o.parcel) < 0.999 ? ` <span style="color:#92400e;font-size:0.72rem;">(רשום ${fmtSqm(parseFloat(o.agreement_area) || 0)})</span>` : ''}</span>
               </label>
             `).join('')}
           `;
