@@ -719,6 +719,61 @@
   .admin-map-legend-box.empty   { background: rgba(255,255,255,0.5); border-color: #6b7280; }
   .admin-map-legend-box.partial { background: rgba(217,119,6,0.55);  border-color: #92400e; }
   .admin-map-legend-box.locked  { background: rgba(45,122,62,0.65);  border-color: #065f46; }
+  /* מקרא קבוצות — תוצרי שיבוץ צבעוני */
+  .admin-map-groups-legend {
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .admin-map-groups-legend-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .admin-map-groups-legend-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+  }
+  .map-group-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: white;
+    border: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text);
+    cursor: default;
+  }
+  .map-group-chip .swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.15);
+    flex-shrink: 0;
+  }
+  .map-group-chip .lot-count {
+    background: rgba(0,0,0,0.06);
+    border-radius: 999px;
+    padding: 1px 7px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .map-group-chip.empty-state {
+    color: var(--text-muted);
+    font-style: italic;
+    background: transparent;
+    border: 1px dashed var(--border);
+  }
   .lot-card.highlighted {
     box-shadow: 0 0 0 3px var(--accent);
     transition: box-shadow 0.3s;
@@ -890,6 +945,8 @@
       <div class="admin-map-legend-item"><div class="admin-map-legend-box locked"></div>נעול במלואו</div>
       <div class="admin-map-legend-item">💡 לחץ על מגרש במפה כדי לקפוץ לכרטיס שלו</div>
     </div>
+    <!-- מקרא קבוצות — צבעי משפחה ושותפויות שמופיעים על המפה -->
+    <div class="admin-map-groups-legend" id="admin-map-groups-legend"></div>
   </div>
 
   <div class="lot-filters">
@@ -1547,6 +1604,73 @@
   let allFamilies = [];        // קבוצות משפחה מ-family_groups
   // allocationsByLot: lot_id -> [{source, owner_name, area, ...}]
   let allocationsByLot = {};
+
+  // ===== פלטת צבעים לקבוצות משפחה =====
+  // 16 צבעים מובהקים, מתאימים לרקע תצלום אוויר (חיים, רוויי-צבע)
+  const FAMILY_COLOR_PALETTE = [
+    '#dc2626', '#ea580c', '#facc15', '#84cc16',
+    '#16a34a', '#0d9488', '#0891b2', '#2563eb',
+    '#4f46e5', '#7c3aed', '#9333ea', '#c026d3',
+    '#db2777', '#f43f5e', '#92400e', '#475569',
+  ];
+
+  // צבעים קבועים לקטגוריות שותפויות "כל-העסקאות" (כשעסקה לא בקבוצת משפחה)
+  const NADLAN_GROUP_COLOR   = '#1e40af';  // כחול עמוק - נדל"ן נדל"ן (כל העסקאות)
+  const YITZHAKI_GROUP_COLOR = '#7e22ce';  // סגול עמוק - דודי יצחקי (כל העסקאות)
+
+  // צבע ברירת-מחדל לבעלים חתום בודד שלא בקבוצה (אדמין משבץ ידני)
+  const SOLO_SIGNED_COLOR = '#64748b';  // אפור ניטרלי
+
+  // בחירת הצבע הבא הזמין מהפלטה (לפי מה שכבר בשימוש)
+  function pickNextFamilyColor(usedColors = []) {
+    const used = new Set(usedColors.filter(Boolean));
+    for (const c of FAMILY_COLOR_PALETTE) {
+      if (!used.has(c)) return c;
+    }
+    // אם כל ה-16 בשימוש — נחזור על הפלטה לפי גודל
+    return FAMILY_COLOR_PALETTE[allFamilies.length % FAMILY_COLOR_PALETTE.length];
+  }
+
+  // איתור הצבע של קבוצה לפי הקצאה (allocation מתוך status.allocs)
+  function getAllocationGroupColor(a) {
+    if (a.source === 'family' && a.family_id) {
+      const fg = allFamilies.find(f => f.id === a.family_id);
+      return fg && fg.color ? fg.color : SOLO_SIGNED_COLOR;
+    }
+    if (a.source === 'nadlan-all')   return NADLAN_GROUP_COLOR;
+    if (a.source === 'yitzhaki-all') return YITZHAKI_GROUP_COLOR;
+    if (a.source === 'nadlan')       return NADLAN_GROUP_COLOR;
+    if (a.source === 'yitzhaki')     return YITZHAKI_GROUP_COLOR;
+    // signed-self / signed-admin בלי קבוצה
+    return SOLO_SIGNED_COLOR;
+  }
+
+  // הצבע הדומיננטי של מגרש = הקבוצה עם השטח הכי גדול
+  function getDominantLotColor(allocs) {
+    if (!allocs || allocs.length === 0) return null;
+    const byColor = {};
+    allocs.forEach(a => {
+      const c = getAllocationGroupColor(a);
+      byColor[c] = (byColor[c] || 0) + (a.area || 0);
+    });
+    let bestColor = null, bestArea = -1;
+    for (const [c, area] of Object.entries(byColor)) {
+      if (area > bestArea) { bestArea = area; bestColor = c; }
+    }
+    return bestColor;
+  }
+
+  // התאמת צבע טקסט (לבן/כהה) לפי בהירות הרקע
+  function getContrastTextColor(hexColor) {
+    if (!hexColor) return '#1e3a8a';
+    const hex = hexColor.replace('#', '');
+    const r = parseInt(hex.substring(0,2), 16);
+    const g = parseInt(hex.substring(2,4), 16);
+    const b = parseInt(hex.substring(4,6), 16);
+    // נוסחת בהירות נתפסת
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6 ? '#111827' : '#ffffff';
+  }
 
   // ===== מעבר בין טאבים =====
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -2757,14 +2881,30 @@
       marker.setAttribute('class', `lot-marker ${status.status}`);
       marker.setAttribute('data-lot', lot.id);
 
+      // צבע דומיננטי של המגרש — הקבוצה עם הכי הרבה מ"ר
+      const groupColor = getDominantLotColor(status.allocs);
+      if (groupColor) {
+        marker.setAttribute('data-group-color', groupColor);
+      }
+
       const circ = document.createElementNS(SVG_NS, 'circle');
       circ.setAttribute('cx', pos.x);
       circ.setAttribute('cy', pos.y);
       circ.setAttribute('r', '1.4');
+      // אם יש צבע קבוצה — דורסים את הצבע של ה-CSS לפי סטטוס
+      if (groupColor) {
+        circ.setAttribute('fill', groupColor);
+        // קו מתאר כהה יותר לקריאות
+        circ.setAttribute('stroke', '#1e293b');
+        circ.setAttribute('stroke-width', '0.25');
+      }
 
       const txt = document.createElementNS(SVG_NS, 'text');
       txt.setAttribute('x', pos.x);
       txt.setAttribute('y', pos.y);
+      if (groupColor) {
+        txt.setAttribute('fill', getContrastTextColor(groupColor));
+      }
       txt.textContent = lot.id;
 
       marker.appendChild(circ);
@@ -2822,6 +2962,71 @@
 
       overlay.appendChild(marker);
     });
+
+    // ציור המקרא הדינמי של הקבוצות
+    renderGroupsLegend();
+  }
+
+  // ===== מקרא קבוצות — מציג איזה צבע שייך לאיזו קבוצה =====
+  function renderGroupsLegend() {
+    const legendEl = document.getElementById('admin-map-groups-legend');
+    if (!legendEl) return;
+
+    // איסוף נתוני שימוש: לכל צבע — שם קבוצה, ספירת מגרשים, סך-הכל מ"ר
+    const usage = new Map();  // color -> { name, lots:Set, area }
+    const addUse = (color, name, lotId, area) => {
+      if (!usage.has(color)) usage.set(color, { name, lots: new Set(), area: 0 });
+      const u = usage.get(color);
+      u.lots.add(lotId);
+      u.area += area || 0;
+    };
+
+    LOTS.forEach(lot => {
+      const allocs = allocationsByLot[lot.id] || [];
+      // נתעד את כל הקבוצות שתורמות למגרש (לא רק הדומיננטית), כי גם זה חשוב למקרא
+      allocs.forEach(a => {
+        const color = getAllocationGroupColor(a);
+        let name;
+        if (a.source === 'family' && a.family_id) {
+          const fg = allFamilies.find(f => f.id === a.family_id);
+          name = fg ? `👨‍👩‍👧 ${fg.family_name}` : '👨‍👩‍👧 משפחה';
+        } else if (a.source === 'nadlan-all' || a.source === 'nadlan') {
+          name = '🌐 נדל"ן נדל"ן';
+        } else if (a.source === 'yitzhaki-all' || a.source === 'yitzhaki') {
+          name = '🌐 דודי יצחקי';
+        } else {
+          name = '🔵 בעלים בודד';
+        }
+        addUse(color, name, lot.id, a.area);
+      });
+    });
+
+    if (usage.size === 0) {
+      legendEl.innerHTML = `
+        <div class="admin-map-groups-legend-title">🎨 מקרא קבוצות</div>
+        <div class="admin-map-groups-legend-grid">
+          <div class="map-group-chip empty-state">עדיין לא בוצעו שיבוצים — כל המגרשים פנויים</div>
+        </div>`;
+      return;
+    }
+
+    // מיון: לפי שטח יורד
+    const sorted = [...usage.entries()].sort((a, b) => b[1].area - a[1].area);
+
+    const chips = sorted.map(([color, u]) => {
+      const lotList = [...u.lots].sort((a, b) => a - b).join(', ');
+      const title = `מגרשים: ${lotList} · סה"כ ${fmtSqm(u.area)}`;
+      return `
+        <div class="map-group-chip" title="${title}">
+          <div class="swatch" style="background:${color};"></div>
+          <span>${u.name}</span>
+          <span class="lot-count">${u.lots.size} ${u.lots.size === 1 ? 'מגרש' : 'מגרשים'}</span>
+        </div>`;
+    }).join('');
+
+    legendEl.innerHTML = `
+      <div class="admin-map-groups-legend-title">🎨 מקרא קבוצות <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;">— ריחוף על צ'יפ מציג את רשימת המגרשים</span></div>
+      <div class="admin-map-groups-legend-grid">${chips}</div>`;
   }
 
   // Toggle map visibility
@@ -3003,11 +3208,15 @@
         ? `${f.members.length} חתומים (${fmtSqm(f.signersArea)}) + ${f.memberDeals.length} עסקאות (${fmtSqm(f.dealsArea)})`
         : `${f.members.length} חברים`;
 
+      const famColor = f.color || '#94a3b8';
       return `
-        <div class="lot-card" style="margin-bottom:14px;">
+        <div class="lot-card" style="margin-bottom:14px;border-right:5px solid ${famColor};">
           <div class="lot-card-header">
             <div>
-              <div class="lot-card-title">👨‍👩‍👧 ${f.family_name}</div>
+              <div class="lot-card-title" style="display:flex;align-items:center;gap:8px;">
+                <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${famColor};border:1px solid rgba(0,0,0,0.15);" title="צבע על המפה: ${famColor}"></span>
+                👨‍👩‍👧 ${f.family_name}
+              </div>
               <div class="lot-card-use">${breakdown} · בחלקות ${parcelList || '—'}</div>
             </div>
             <button class="btn-sm btn-view" data-action="manage-fam" data-id="${f.id}">⚙ ניהול</button>
@@ -3036,11 +3245,26 @@
     const members = isNew ? [] : allSignedOwners.filter(s => s.family_group_id === familyId);
     const memberDeals = isNew ? [] : allDeals.filter(d => d.family_group_id === familyId);
 
+    // צבע נוכחי / מומלץ לקבוצה חדשה (הזמין הראשון בפלטה)
+    const usedColors = allFamilies.map(f => f.color).filter(Boolean);
+    const initialColor = family && family.color ? family.color : pickNextFamilyColor(usedColors);
+
     document.getElementById('family-modal-content').innerHTML = `
       <h2>${isNew ? '➕ יצירת קבוצת משפחה חדשה' : '⚙ ניהול קבוצה: ' + family.family_name}</h2>
 
       <div class="modal-section-title">שם הקבוצה</div>
       <input type="text" id="fam-name" value="${family ? family.family_name : ''}" placeholder="לדוגמה: משפחת פלדמן-ברקוביץ" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
+
+      <div class="modal-section-title">צבע הקבוצה <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;">— יוצג על המפה במגרשים שיוקצו לקבוצה</span></div>
+      <div id="fam-color-picker" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        ${FAMILY_COLOR_PALETTE.map(c => `
+          <button type="button" class="fam-color-swatch" data-color="${c}"
+            style="width:32px;height:32px;border-radius:50%;border:${c === initialColor ? '3px solid #1e293b' : '2px solid rgba(0,0,0,0.15)'};background:${c};cursor:pointer;outline:none;padding:0;"
+            title="${c}"></button>
+        `).join('')}
+        <input type="hidden" id="fam-color" value="${initialColor}">
+        <span id="fam-color-value" style="margin-right:8px;font-family:monospace;font-size:0.85rem;color:var(--text-muted);">${initialColor}</span>
+      </div>
 
       <div class="modal-section-title">הערה (אופציונלי)</div>
       <textarea id="fam-notes" placeholder="הערה...">${family ? (family.notes || '') : ''}</textarea>
@@ -3087,6 +3311,19 @@
     document.getElementById('family-modal').classList.add('visible');
     document.getElementById('fam-close-btn').addEventListener('click', closeFamilyModal);
     document.getElementById('fam-save-btn').addEventListener('click', () => saveFamily(familyId));
+
+    // === בחירת צבע ===
+    document.querySelectorAll('.fam-color-swatch').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const c = btn.dataset.color;
+        document.getElementById('fam-color').value = c;
+        document.getElementById('fam-color-value').textContent = c;
+        // עדכון מסגרת בכל ה-swatches
+        document.querySelectorAll('.fam-color-swatch').forEach(s => {
+          s.style.border = s.dataset.color === c ? '3px solid #1e293b' : '2px solid rgba(0,0,0,0.15)';
+        });
+      });
+    });
 
     if (!isNew) {
       document.getElementById('fam-delete-btn').addEventListener('click', () => deleteFamily(familyId));
@@ -3247,13 +3484,18 @@
   async function saveFamily(familyId) {
     const name = document.getElementById('fam-name').value.trim();
     const notes = document.getElementById('fam-notes').value.trim();
+    const colorEl = document.getElementById('fam-color');
+    const color = colorEl ? colorEl.value : null;
     if (!name) { alert('יש להזין שם קבוצה'); return; }
 
+    const payload = { family_name: name, notes: notes || null };
+    if (color) payload.color = color;
+
     if (!familyId) {
-      const { error } = await supabase.from('family_groups').insert({ family_name: name, notes: notes || null });
+      const { error } = await supabase.from('family_groups').insert(payload);
       if (error) { alert('שגיאה: ' + error.message); return; }
     } else {
-      const { error } = await supabase.from('family_groups').update({ family_name: name, notes: notes || null }).eq('id', familyId);
+      const { error } = await supabase.from('family_groups').update(payload).eq('id', familyId);
       if (error) { alert('שגיאה: ' + error.message); return; }
     }
     closeFamilyModal();
