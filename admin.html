@@ -624,6 +624,18 @@
     stroke: var(--accent);
     stroke-width: 0.4;
   }
+  /* מגרשי שלב ב' — פסים אלכסוניים (4, 5, 6) */
+  .admin-map-overlay polygon.phase-2 {
+    fill: url(#admin-phase2-stripes);
+    stroke: #94a3b8;
+    stroke-width: 0.3;
+    stroke-dasharray: 1 0.5;
+  }
+  .admin-map-overlay polygon.phase-2:hover {
+    fill: url(#admin-phase2-stripes-hover);
+    stroke: var(--accent);
+    stroke-width: 0.5;
+  }
   /* Tooltip צף */
   .admin-map-tooltip {
     position: absolute;
@@ -2872,6 +2884,21 @@
     const SVG_NS = 'http://www.w3.org/2000/svg';
     overlay.innerHTML = '';
 
+    // Patterns לפסים אלכסוניים — מגרשי שלב ב' (4, 5, 6)
+    const defsSvg = `
+      <defs>
+        <pattern id="admin-phase2-stripes" patternUnits="userSpaceOnUse" width="2.5" height="2.5" patternTransform="rotate(45)">
+          <rect width="2.5" height="2.5" fill="rgba(148,163,184,0.30)"/>
+          <line x1="0" y1="0" x2="0" y2="2.5" stroke="#475569" stroke-width="0.6"/>
+        </pattern>
+        <pattern id="admin-phase2-stripes-hover" patternUnits="userSpaceOnUse" width="2.5" height="2.5" patternTransform="rotate(45)">
+          <rect width="2.5" height="2.5" fill="rgba(201,169,97,0.30)"/>
+          <line x1="0" y1="0" x2="0" y2="2.5" stroke="#475569" stroke-width="0.6"/>
+        </pattern>
+      </defs>
+    `;
+    overlay.insertAdjacentHTML('beforeend', defsSvg);
+
     const tooltip = document.getElementById('admin-map-tooltip');
     const container = document.getElementById('admin-map-container');
 
@@ -2881,7 +2908,12 @@
       const status = lotStatus(lot);
       const poly = document.createElementNS(SVG_NS, 'polygon');
       poly.setAttribute('points', points.map(p => `${p.x},${p.y}`).join(' '));
-      poly.setAttribute('class', status.status);
+      // class הסטטוס + class phase-2 למגרשי שלב ב'
+      const classes = [status.status];
+      if (lot.phase2Factor && lot.phase2Factor < 1) {
+        classes.push('phase-2');
+      }
+      poly.setAttribute('class', classes.join(' '));
       poly.setAttribute('data-lot', lot.id);
 
       // ריחוף — Tooltip עשיר שצף עם העכבר
@@ -2915,10 +2947,16 @@
           allocsHtml = `<div class="ttl-divider"></div><div style="font-size:0.78rem;font-weight:600;margin-bottom:3px;">משובצים:</div>${summary}${more}`;
         }
 
+        // אזהרת שלב ב' — מגרשים שאינם בתכנית בינוי שלב א'
+        const phase2Warning = (lot.phase2Factor && lot.phase2Factor < 1)
+          ? `<div style="margin-top:6px;padding:5px 7px;background:rgba(251,191,36,0.18);border-right:3px solid #fbbf24;border-radius:4px;font-size:0.78rem;color:#fbbf24;font-weight:600;">⚠ שלב ב' — אינו בתכנית בינוי שלב א'. דחייה למועד עבודות מטרו.</div>`
+          : '';
+
         tooltip.innerHTML = `
           <div class="ttl-title">מגרש ${lot.id} · ${statusLabel}</div>
           <div style="font-size:0.78rem;opacity:0.85;margin-bottom:4px;">${lot.use}</div>
           <div class="ttl-rights">${rights.map(r => `<span>${r}</span>`).join('')}</div>
+          ${phase2Warning}
           <div class="ttl-divider"></div>
           <div class="ttl-row"><span class="ttl-label">שטח חקלאי נדרש:</span><span class="ttl-value">${fmtSqm(status.required)}</span></div>
           <div class="ttl-row"><span class="ttl-label">הוקצה:</span><span class="ttl-value" style="color:#86efac;">${fmtSqm(status.allocated)}</span></div>
