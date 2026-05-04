@@ -948,7 +948,18 @@
     </div>
     <div class="admin-map-container" id="admin-map-container">
       <img class="admin-map-image" src="assets/project-map.jpg" alt="תשריט הפרויקט">
-      <svg class="admin-map-overlay" id="admin-map-overlay" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+      <svg class="admin-map-overlay" id="admin-map-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="admin-phase2-stripes" patternUnits="userSpaceOnUse" width="2.5" height="2.5" patternTransform="rotate(45)">
+            <rect width="2.5" height="2.5" fill="rgba(148,163,184,0.30)"/>
+            <line x1="0" y1="0" x2="0" y2="2.5" stroke="#475569" stroke-width="0.6"/>
+          </pattern>
+          <pattern id="admin-phase2-stripes-hover" patternUnits="userSpaceOnUse" width="2.5" height="2.5" patternTransform="rotate(45)">
+            <rect width="2.5" height="2.5" fill="rgba(201,169,97,0.30)"/>
+            <line x1="0" y1="0" x2="0" y2="2.5" stroke="#475569" stroke-width="0.6"/>
+          </pattern>
+        </defs>
+      </svg>
       <div class="admin-map-tooltip" id="admin-map-tooltip"></div>
     </div>
     <div class="admin-map-legend">
@@ -2882,22 +2893,12 @@
     const overlay = document.getElementById('admin-map-overlay');
     if (!overlay) return;
     const SVG_NS = 'http://www.w3.org/2000/svg';
-    overlay.innerHTML = '';
-
-    // Patterns לפסים אלכסוניים — מגרשי שלב ב' (4, 5, 6)
-    const defsSvg = `
-      <defs>
-        <pattern id="admin-phase2-stripes" patternUnits="userSpaceOnUse" width="2.5" height="2.5" patternTransform="rotate(45)">
-          <rect width="2.5" height="2.5" fill="rgba(148,163,184,0.30)"/>
-          <line x1="0" y1="0" x2="0" y2="2.5" stroke="#475569" stroke-width="0.6"/>
-        </pattern>
-        <pattern id="admin-phase2-stripes-hover" patternUnits="userSpaceOnUse" width="2.5" height="2.5" patternTransform="rotate(45)">
-          <rect width="2.5" height="2.5" fill="rgba(201,169,97,0.30)"/>
-          <line x1="0" y1="0" x2="0" y2="2.5" stroke="#475569" stroke-width="0.6"/>
-        </pattern>
-      </defs>
-    `;
-    overlay.insertAdjacentHTML('beforeend', defsSvg);
+    // ניקוי הכל חוץ מ-<defs> (שמכיל את הפטרנים של מגרשי שלב ב')
+    Array.from(overlay.children).forEach(child => {
+      if (child.tagName.toLowerCase() !== 'defs') {
+        child.remove();
+      }
+    });
 
     const tooltip = document.getElementById('admin-map-tooltip');
     const container = document.getElementById('admin-map-container');
