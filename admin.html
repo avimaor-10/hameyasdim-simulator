@@ -1753,7 +1753,12 @@
   function getDealEffectiveArea(deal) {
     if (!deal) return 0;
     const stored = parseFloat(deal.area_sqm) || 0;
-    return stored * getParcelFactor(deal.parcel);
+    // אם יש override_factor בעסקה — להשתמש בו במקום מקדם החלקה של השמאי
+    // (לדוגמה: עסקת קרן מרתון בחלקה 45 — כל השטח באיחוד למרות שהשמאי קבע 55.4%)
+    const factor = (deal.override_factor != null && deal.override_factor !== '')
+      ? parseFloat(deal.override_factor)
+      : getParcelFactor(deal.parcel);
+    return stored * factor;
   }
 
   // ===== מעבר בין טאבים =====
