@@ -3254,6 +3254,15 @@
       const dealsArea = memberDeals.reduce((sum, d) => sum + getDealEffectiveArea(d), 0);
       const totalArea = signersArea + dealsArea;
 
+      // שטח רשום בטאבו (לפני מקדם השמאי) — סה"כ קרקע בבעלות הקבוצה
+      const signersAreaRegistered = memberSigners.reduce((sum, m) => {
+        const stored = parseFloat(m.agreement_area) || parseFloat(m.unification_area) || 0;
+        const deduction = getOwnerRegisteredDeduction(m);
+        return sum + Math.max(0, stored - deduction);
+      }, 0);
+      const dealsAreaRegistered = memberDeals.reduce((sum, d) => sum + (parseFloat(d.area_sqm) || 0), 0);
+      const totalAreaRegistered = signersAreaRegistered + dealsAreaRegistered;
+
       const allocatedSignersArea = allocs
         .filter(a => signerIds.has(a.signed_owner_id))
         .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
@@ -3269,6 +3278,7 @@
         signersArea,
         dealsArea,
         totalArea,
+        totalAreaRegistered,
         allocatedArea,
         remaining: totalArea - allocatedArea,
       };
@@ -3336,7 +3346,8 @@
           </div>
           <div class="lot-progress"><div class="lot-progress-fill" style="width:${pct}%"></div></div>
           <div class="lot-stats">
-            <div class="lot-stat" title="השטח שמשתתף באיחוד וחלוקה לאחר מקדמי השמאי. יכול להיות פחות מהשטח הרשום בטאבו אם יש חלקות שלא משתתפות במלואן (כמו חלקה 21 שמשתתפת רק 32.8%, או חלקה 46 שמשתתפת 95%)."><div class="lot-stat-label">שטח באיחוד וחלוקה</div><div class="lot-stat-value">${fmtSqm(f.totalArea)}</div></div>
+            <div class="lot-stat" title="סך הקרקע בבעלות הקבוצה לפי הרשום בטאבו (לפני הפעלת מקדמי השמאי לחלקות חלקיות)."><div class="lot-stat-label">בבעלות הקבוצה</div><div class="lot-stat-value">${fmtSqm(f.totalAreaRegistered)}</div></div>
+            <div class="lot-stat" title="השטח שמשתתף באיחוד וחלוקה לאחר מקדמי השמאי. יכול להיות פחות מהשטח הרשום בטאבו אם יש חלקות שלא משתתפות במלואן (כמו חלקה 21 שמשתתפת רק 32.8%, או חלקה 46 שמשתתפת 95%)."><div class="lot-stat-label">באיחוד וחלוקה</div><div class="lot-stat-value">${fmtSqm(f.totalArea)}</div></div>
             <div class="lot-stat" title="השטח שכבר הוקצה למגרשים סחירים במצב היוצא."><div class="lot-stat-label">הוקצה</div><div class="lot-stat-value" style="color:var(--success);">${fmtSqm(f.allocatedArea)}</div></div>
             <div class="lot-stat" title="השטח שעדיין ניתן להקצות למגרשים נוספים."><div class="lot-stat-label">נותר להקצאה</div><div class="lot-stat-value" style="color:${f.remaining > 0 ? 'var(--warning)' : 'var(--success)'};">${f.remaining > 0 ? fmtSqm(f.remaining) : '✓'}</div></div>
           </div>
