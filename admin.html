@@ -989,8 +989,8 @@
       <div class="label">סה"כ חברים בקבוצות</div>
       <div class="value" id="stat-fam-members">-</div>
     </div>
-    <div class="stat-card gold">
-      <div class="label">סה"כ שטח בקבוצות</div>
+    <div class="stat-card gold" title="הסכום של שטחי כל הקבוצות באיחוד וחלוקה (אחרי מקדמי השמאי לחלקות חלקיות). יכול להיות נמוך מהשטח הרשום בטאבו.">
+      <div class="label">שטח באיחוד וחלוקה (כל הקבוצות)</div>
       <div class="value" id="stat-fam-area" style="font-size:1.2rem;">-</div>
     </div>
     <div class="stat-card approved">
@@ -3336,9 +3336,9 @@
           </div>
           <div class="lot-progress"><div class="lot-progress-fill" style="width:${pct}%"></div></div>
           <div class="lot-stats">
-            <div class="lot-stat"><div class="lot-stat-label">סה"כ שטח</div><div class="lot-stat-value">${fmtSqm(f.totalArea)}</div></div>
-            <div class="lot-stat"><div class="lot-stat-label">הוקצה</div><div class="lot-stat-value" style="color:var(--success);">${fmtSqm(f.allocatedArea)}</div></div>
-            <div class="lot-stat"><div class="lot-stat-label">נותר</div><div class="lot-stat-value" style="color:${f.remaining > 0 ? 'var(--warning)' : 'var(--success)'};">${f.remaining > 0 ? fmtSqm(f.remaining) : '✓'}</div></div>
+            <div class="lot-stat" title="השטח שמשתתף באיחוד וחלוקה לאחר מקדמי השמאי. יכול להיות פחות מהשטח הרשום בטאבו אם יש חלקות שלא משתתפות במלואן (כמו חלקה 21 שמשתתפת רק 32.8%, או חלקה 46 שמשתתפת 95%)."><div class="lot-stat-label">שטח באיחוד וחלוקה</div><div class="lot-stat-value">${fmtSqm(f.totalArea)}</div></div>
+            <div class="lot-stat" title="השטח שכבר הוקצה למגרשים סחירים במצב היוצא."><div class="lot-stat-label">הוקצה</div><div class="lot-stat-value" style="color:var(--success);">${fmtSqm(f.allocatedArea)}</div></div>
+            <div class="lot-stat" title="השטח שעדיין ניתן להקצות למגרשים נוספים."><div class="lot-stat-label">נותר להקצאה</div><div class="lot-stat-value" style="color:${f.remaining > 0 ? 'var(--warning)' : 'var(--success)'};">${f.remaining > 0 ? fmtSqm(f.remaining) : '✓'}</div></div>
           </div>
           ${membersPreview ? `<div style="margin-top:10px;font-size:0.83rem;color:var(--text-muted);">${membersPreview}${moreCount}</div>` : ''}
           ${f.notes ? `<div style="margin-top:8px;font-size:0.82rem;color:var(--text-muted);font-style:italic;">📝 ${f.notes}</div>` : ''}
