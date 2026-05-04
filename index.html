@@ -409,6 +409,21 @@
     fill: #fef08a;                    /* צהוב בהיר יותר */
   }
 
+  /* מגרשי שלב ב' — דחייה לעבודות מטרו (פסים אלכסוניים) */
+  .lot-shape.phase-2 {
+    fill: url(#phase2-stripes);
+  }
+  .lot-shape.phase-2:hover {
+    fill: url(#phase2-stripes-hover);
+  }
+  .lot-shape.phase-2.selected {
+    fill: url(#phase2-stripes-selected) !important;
+  }
+  .lot-number.phase-2 {
+    fill: #cbd5e1;                    /* אפור בהיר במקום צהוב */
+    stroke: #475569;
+  }
+
   /* (CSS של מצבי עריכה הוסר — המפה עם הפוליגונים והמספרים קבועה) */
 
   .map-legend {
@@ -1598,6 +1613,25 @@
 
     overlay.innerHTML = '';
 
+    // הגדרת patterns לפסים אלכסוניים — מגרשי שלב ב' (4, 5, 6)
+    const defsSvg = `
+      <defs>
+        <pattern id="phase2-stripes" patternUnits="userSpaceOnUse" width="2.5" height="2.5" patternTransform="rotate(45)">
+          <rect width="2.5" height="2.5" fill="rgba(148,163,184,0.30)"/>
+          <line x1="0" y1="0" x2="0" y2="2.5" stroke="#475569" stroke-width="0.6"/>
+        </pattern>
+        <pattern id="phase2-stripes-hover" patternUnits="userSpaceOnUse" width="2.5" height="2.5" patternTransform="rotate(45)">
+          <rect width="2.5" height="2.5" fill="rgba(255,215,0,0.50)"/>
+          <line x1="0" y1="0" x2="0" y2="2.5" stroke="#475569" stroke-width="0.6"/>
+        </pattern>
+        <pattern id="phase2-stripes-selected" patternUnits="userSpaceOnUse" width="2.5" height="2.5" patternTransform="rotate(45)">
+          <rect width="2.5" height="2.5" fill="rgba(45,122,62,0.50)"/>
+          <line x1="0" y1="0" x2="0" y2="2.5" stroke="#1e293b" stroke-width="0.6"/>
+        </pattern>
+      </defs>
+    `;
+    overlay.insertAdjacentHTML('beforeend', defsSvg);
+
     LOTS.forEach(lot => {
       const points = LOT_POLYGONS[lot.id];
       if (!points) return;
@@ -1612,6 +1646,10 @@
       poly.setAttribute('class', 'lot-shape');
       poly.id = `lot-polygon-${lot.id}`;
       poly.setAttribute('points', pointsAttr(points));
+      // בידול שלב ב' — מגרשים 4, 5, 6 (phase2Factor < 1)
+      if (lot.phase2Factor < 1) {
+        poly.classList.add('phase-2');
+      }
       g.appendChild(poly);
 
       // מספר המגרש - במיקום מותאם או במרכז הפוליגון
@@ -1622,6 +1660,9 @@
       text.setAttribute('y', numPos.y.toFixed(2));
       text.textContent = lot.id;
       text.dataset.lotId = lot.id;
+      if (lot.phase2Factor < 1) {
+        text.classList.add('phase-2');
+      }
       g.appendChild(text);
 
       // אירועי tooltip + בחירה על המספר
@@ -1656,7 +1697,13 @@
     rights.push(`<div class="tt-row"><span>💰 שווי מגרש*</span><span class="tt-val">${formatNIS(lot.outgoingValue)}</span></div>`);
     rights.push(`<div class="tt-row"><span>📐 חקלאי נדרש</span><span class="tt-val">${formatSqm(lot.requiredIncomingArea)}</span></div>`);
 
-    tooltip.innerHTML = `<div class="tt-title">מגרש ${lot.id} · ${lot.use}</div>${rights.join('')}<div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.3); font-size:0.7rem; opacity:0.85; font-style:italic;">* ע"פ דו"ח שמאי האיחוד וחלוקה</div>`;
+    // אזהרת שלב ב' — מגרשים שאינם בתכנית בינוי שלב א'
+    let phase2Warning = '';
+    if (lot.phase2Factor < 1) {
+      phase2Warning = `<div style="margin-top:6px; padding:5px 7px; background:rgba(251,191,36,0.18); border-right:3px solid #fbbf24; border-radius:4px; font-size:0.78rem; color:#fbbf24; font-weight:600;">⚠ שלב ב' — אינו בתכנית בינוי שלב א'. דחייה למועד עבודות מטרו.</div>`;
+    }
+
+    tooltip.innerHTML = `<div class="tt-title">מגרש ${lot.id} · ${lot.use}</div>${rights.join('')}${phase2Warning}<div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.3); font-size:0.7rem; opacity:0.85; font-style:italic;">* ע"פ דו"ח שמאי האיחוד וחלוקה</div>`;
     tooltip.classList.add('visible');
     moveTooltip(e);
   }
