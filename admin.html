@@ -2513,29 +2513,51 @@
         signedInfo.textContent = '';
         signedIdHidden.value = '';
       } else if (v === 'family') {
-        // מציג רק משפחות עם חתומים — שטח משתתף בלבד.
-        // קבוצות שותפות (חנן מור השקעות, 4 חברות פרטיות, רוכשי שותפות) — אינן ברשימה הזו.
-        // ה-5% שלהן מוקצה אוטומטית כחלק מהשותפות דרך "🏢 נדלן נדלן → 🌐 כל העסקאות".
+        // מציג קבוצות משפחה עם חתומים *או* עסקאות עצמאיות (כובע 2).
+        // רק "רוכשי שותפות נדלן נדלן קבוצת מור" (השותפות הראשית) מוסתרת —
+        // היא מוקצית דרך 🏢 נדלן נדלן / 👤 דודי יצחקי בלבד.
+        // חנן מור השקעות ו-4 חברות פרטיות (כשפועלות בכובע 2 עם category='משפחתי')
+        // מופיעות ברשימה ככל קבוצת משפחה רגילה.
         const PARTNERSHIP_NAMES = [
-          'רוכשי שותפות נדלן נדלן קבוצת מור',
-          'קבוצת חנן מור השקעות',
-          'קבוצת נדלן נדלן (4 חברות פרטיות)'
+          'רוכשי שותפות נדלן נדלן קבוצת מור'
         ];
         const familiesWithStats = allFamilies
           .filter(fg => !PARTNERSHIP_NAMES.includes(fg.family_name))
           .map(fg => {
+            // חתומים
             const members = allSignedOwners.filter(s => s.family_group_id === fg.id);
             const memberIds = new Set(members.map(m => m.id));
-            const totalArea = members.reduce((sum, m) => sum + getOwnerEffectiveArea(m), 0);
-            const allocatedArea = allSignedAllocations
+            const signedTotal = members.reduce((sum, m) => sum + getOwnerEffectiveArea(m), 0);
+            const signedAllocated = allSignedAllocations
               .filter(a => memberIds.has(a.signed_owner_id))
               .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
-            return { ...fg, memberCount: members.length, totalArea, allocatedArea, remaining: totalArea - allocatedArea };
-          }).filter(f => f.memberCount > 0 && f.remaining > 0.5);
+            const signedRemaining = Math.max(0, signedTotal - signedAllocated);
+            // עסקאות עצמאיות (כובע 2) — רק עסקאות ב-category='משפחתי'
+            const groupDeals = allDeals.filter(d => d.family_group_id === fg.id && d.category === 'משפחתי');
+            const dealsRemaining = groupDeals.reduce((sum, d) => {
+              const used = allDealAllocations
+                .filter(a => a.deal_id === d.id)
+                .reduce((s, a) => s + (+a.allocated_area || 0), 0);
+              const total = getDealEffectiveArea(d);
+              return sum + Math.max(0, total - used);
+            }, 0);
+            const totalRemaining = signedRemaining + dealsRemaining;
+            const totalCount = members.length + groupDeals.length;
+            return {
+              ...fg,
+              memberCount: members.length,
+              dealCount: groupDeals.length,
+              remaining: totalRemaining,
+              totalCount,
+            };
+          }).filter(f => f.totalCount > 0 && f.remaining > 0.5);
 
-        familySel.innerHTML = '<option value="">בחר קבוצה...</option>' + familiesWithStats.map(f =>
-          `<option value="${f.id}">${f.family_name} · ${f.memberCount} חברים · נותר ${f.remaining.toFixed(0)} מ"ר</option>`
-        ).join('');
+        familySel.innerHTML = '<option value="">בחר קבוצה...</option>' + familiesWithStats.map(f => {
+          const parts = [];
+          if (f.memberCount > 0) parts.push(`${f.memberCount} חברים`);
+          if (f.dealCount > 0) parts.push(`${f.dealCount} עסקאות`);
+          return `<option value="${f.id}">${f.family_name} · ${parts.join(' + ')} · נותר ${f.remaining.toFixed(0)} מ"ר</option>`;
+        }).join('');
         familySection.style.display = 'block';
         familyInfo.textContent = '';
         if (familiesWithStats.length === 0) {
@@ -2547,14 +2569,30 @@
     familySel.addEventListener('change', () => {
       const fg = allFamilies.find(f => f.id === familySel.value);
       if (!fg) { familyInfo.textContent = ''; return; }
+      // חתומים
       const members = allSignedOwners.filter(s => s.family_group_id === fg.id);
       const memberIds = new Set(members.map(m => m.id));
-      const totalArea = members.reduce((sum, m) => sum + getOwnerEffectiveArea(m), 0);
-      const allocatedArea = allSignedAllocations
+      const signedTotal = members.reduce((sum, m) => sum + getOwnerEffectiveArea(m), 0);
+      const signedAllocated = allSignedAllocations
         .filter(a => memberIds.has(a.signed_owner_id))
         .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
-      const remaining = totalArea - allocatedArea;
-      familyInfo.innerHTML = `<strong>${members.length} חברים</strong> · סה"כ שטח משתתף: ${totalArea.toFixed(0)} מ"ר · הוקצה: ${allocatedArea.toFixed(0)} · <strong style="color:var(--success);">נותר: ${remaining.toFixed(0)}</strong>`;
+      const signedRemaining = Math.max(0, signedTotal - signedAllocated);
+      // עסקאות עצמאיות (כובע 2) — category='משפחתי' בלבד
+      const groupDeals = allDeals.filter(d => d.family_group_id === fg.id && d.category === 'משפחתי');
+      let dealsTotal = 0, dealsAllocated = 0;
+      groupDeals.forEach(d => {
+        dealsTotal += getDealEffectiveArea(d);
+        dealsAllocated += allDealAllocations
+          .filter(a => a.deal_id === d.id)
+          .reduce((s, a) => s + (+a.allocated_area || 0), 0);
+      });
+      const totalArea = signedTotal + dealsTotal;
+      const totalAllocated = signedAllocated + dealsAllocated;
+      const totalRemaining = signedRemaining + Math.max(0, dealsTotal - dealsAllocated);
+      const parts = [];
+      if (members.length > 0) parts.push(`<strong>${members.length} חברים</strong>`);
+      if (groupDeals.length > 0) parts.push(`<strong>${groupDeals.length} עסקאות</strong>`);
+      familyInfo.innerHTML = `${parts.join(' + ')} · סה"כ שטח משתתף: ${totalArea.toFixed(0)} מ"ר · הוקצה: ${totalAllocated.toFixed(0)} · <strong style="color:var(--success);">נותר: ${totalRemaining.toFixed(0)}</strong>`;
     });
 
     dealSel.addEventListener('change', () => {
@@ -2685,7 +2723,10 @@
 
       const family = allFamilies.find(f => f.id === familyId);
       const members = allSignedOwners.filter(s => s.family_group_id === familyId);
-      const memberDeals = allDeals.filter(d => d.family_group_id === familyId);
+      // רק עסקאות עצמאיות (כובע 2) — category='משפחתי'.
+      // עסקאות 5% (כובע 1, category='נדלן נדלן'/'דודי יצחקי') לא נכללות בהקצאה דרך הקבוצה,
+      // הן מוקצות אוטומטית רק במסגרת השותפות.
+      const memberDeals = allDeals.filter(d => d.family_group_id === familyId && d.category === 'משפחתי');
 
       if (members.length === 0 && memberDeals.length === 0) {
         alert('אין חברים או עסקאות בקבוצה');
