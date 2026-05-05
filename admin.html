@@ -3014,7 +3014,7 @@
 
       // ריחוף — Tooltip עשיר שצף עם העכבר
       poly.addEventListener('mouseenter', (e) => {
-        const pct = status.required > 0 ? Math.round(status.allocated / status.required * 100) : 0;
+        const pct = status.required > 0 ? Math.floor(status.allocated / status.required * 100) : 0;
         const rights = [];
         if (lot.units > 0)       rights.push(`🏠 ${lot.units} דירות בעלות`);
         if (lot.rentalUnits > 0) rights.push(`🔑 ${lot.rentalUnits} השכרה`);
