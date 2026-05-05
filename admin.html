@@ -2065,7 +2065,37 @@
 
   // ===== חישוב סטטוס מגרש =====
   function lotStatus(lot) {
-    const allocs = allocationsByLot[lot.id] || [];
+    const rawAllocs = allocationsByLot[lot.id] || [];
+
+    // סינון רשומות בודדות (signed-admin / signed-self) של חברי משפחה
+    // כשכבר קיימת רשומת אגרגציה ברמת המשפחה (כמו פלדמן ברקוביץ).
+    // המטרה: כל קבוצה תוצג ביחידה אחת, פירוט החברים יופיע רק בלחיצה על "פירוט חברים".
+    const aggregatedFamilyIds = new Set(
+      rawAllocs
+        .filter(a => (a.source === 'family' || a.source === 'nadlan-all' || a.source === 'yitzhaki-all') && a.family_id)
+        .map(a => a.family_id)
+    );
+    const allocs = rawAllocs.filter(a => {
+      if (a.source === 'signed-admin' || a.source === 'signed-self') {
+        let ownerFamilyId = null;
+        if (a.signed_owner_id) {
+          const owner = allSignedOwners.find(o => o.id === a.signed_owner_id);
+          if (owner) ownerFamilyId = owner.family_group_id;
+        }
+        if (!ownerFamilyId && a.owner_name) {
+          const owner = allSignedOwners.find(o =>
+            o.owner_name === a.owner_name && (!a.owner_id || String(o.id_number || '') === String(a.owner_id))
+          ) || allSignedOwners.find(o => o.owner_name === a.owner_name);
+          if (owner) ownerFamilyId = owner.family_group_id;
+        }
+        // אם הבעלים שייך למשפחה שכבר יש לה אגרגציה — מסתירים
+        if (ownerFamilyId && aggregatedFamilyIds.has(ownerFamilyId)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
     const allocated = allocs.reduce((s, a) => s + a.area, 0);
     const required = lot.requiredIncomingArea;
     const remaining = required - allocated;
