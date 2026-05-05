@@ -2075,7 +2075,7 @@
         .filter(a => (a.source === 'family' || a.source === 'nadlan-all' || a.source === 'yitzhaki-all') && a.family_id)
         .map(a => a.family_id)
     );
-    const allocs = rawAllocs.filter(a => {
+    let allocs = rawAllocs.filter(a => {
       // הסתרת בחירות עצמיות (signed-self) עם 0 מ"ר — בחירות פנדינג לא הוקצו בפועל
       if (a.source === 'signed-self' && (a.area || 0) === 0) {
         return false;
@@ -2103,6 +2103,46 @@
       }
       return true;
     });
+
+    // ===== איחוד 3 קבוצות נדלן נדלן לרשומה אחת =====
+    // השותפות הראשית + חנן מור השקעות + 4 חברות פרטיות → רשומה אחת בשם השותפות.
+    // החברות מופיעות בתוך פירוט החברים יחד עם רוכשי יחידות הקרקע — אין הפרדה בתצוגה.
+    const PARTNERSHIP_NAMES = [
+      'רוכשי שותפות נדלן נדלן קבוצת מור',
+      'קבוצת חנן מור השקעות',
+      'קבוצת נדלן נדלן (4 חברות פרטיות)'
+    ];
+    const partnershipEntries = allocs.filter(a => PARTNERSHIP_NAMES.includes(a.family_name));
+    if (partnershipEntries.length > 1) {
+      const nonPartnership = allocs.filter(a => !PARTNERSHIP_NAMES.includes(a.family_name));
+      const main = partnershipEntries.find(a => a.family_name === 'רוכשי שותפות נדלן נדלן קבוצת מור')
+                || partnershipEntries[0];
+      const totalArea = partnershipEntries.reduce((s, a) => s + (a.area || 0), 0);
+      const totalRemaining = partnershipEntries
+        .filter(a => a.family_remaining !== undefined)
+        .reduce((s, a) => s + a.family_remaining, 0);
+      const mergedBreakdown = [];
+      partnershipEntries.forEach(a => {
+        if (Array.isArray(a.members_breakdown)) {
+          mergedBreakdown.push(...a.members_breakdown);
+        }
+      });
+      mergedBreakdown.sort((a, b) => (b.area || 0) - (a.area || 0));
+      const totalMembers = partnershipEntries.reduce((s, a) => s + (a.member_count || 0), 0);
+      const merged = {
+        ...main,
+        area: totalArea,
+        family_remaining: totalRemaining,
+        members_breakdown: mergedBreakdown,
+        member_count: totalMembers,
+        owner_name: `רוכשי שותפות נדלן נדלן קבוצת מור (${totalMembers} חברים)`,
+        family_name: 'רוכשי שותפות נדלן נדלן קבוצת מור',
+      };
+      // החלפת הרשומות הקיימות במאוחדת — שמירה על המיקום של הראשית
+      const idx = allocs.indexOf(main);
+      allocs = allocs.filter(a => !PARTNERSHIP_NAMES.includes(a.family_name));
+      allocs.splice(Math.max(0, idx), 0, merged);
+    }
 
     const allocated = allocs.reduce((s, a) => s + a.area, 0);
     const required = lot.requiredIncomingArea;
