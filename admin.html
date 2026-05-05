@@ -2944,9 +2944,34 @@
                           : status.status === 'partial' ? `⏳ חלקי ${pct}%`
                           : '○ פנוי';
         // רשימת משובצים — כולל "נותר" לבעלים בודד / למשפחה
+        // איחוד תת-קבוצות שותפות נדלן נדלן (חנן מור השקעות + 4 חברות פרטיות) לתצוגה אחת
+        // החלוקה הפנימית מנוהלת מאחורי הקלעים — בטולטיפ מוצגת רק הקבוצה כיחידה אחת
+        const PARTNERSHIP_NAMES = [
+          'רוכשי שותפות נדלן נדלן קבוצת מור',
+          'קבוצת חנן מור השקעות',
+          'קבוצת נדלן נדלן (4 חברות פרטיות)'
+        ];
+        const partnershipAllocs = (status.allocs || []).filter(a => PARTNERSHIP_NAMES.includes(a.owner_name));
+        const otherAllocs       = (status.allocs || []).filter(a => !PARTNERSHIP_NAMES.includes(a.owner_name));
+        let displayAllocs;
+        if (partnershipAllocs.length > 0) {
+          const totalArea = partnershipAllocs.reduce((s, a) => s + (a.area || 0), 0);
+          const totalRem  = partnershipAllocs
+            .filter(a => a.family_remaining !== undefined)
+            .reduce((s, a) => s + a.family_remaining, 0);
+          displayAllocs = [{
+            owner_name: 'רוכשי שותפות נדלן נדלן קבוצת מור',
+            area: totalArea,
+            family_remaining: partnershipAllocs.some(a => a.family_remaining !== undefined) ? totalRem : undefined,
+            source: 'family'
+          }, ...otherAllocs];
+        } else {
+          displayAllocs = otherAllocs;
+        }
+
         let allocsHtml = '';
-        if (status.allocs && status.allocs.length > 0) {
-          const summary = status.allocs.slice(0, 4).map(a => {
+        if (displayAllocs && displayAllocs.length > 0) {
+          const summary = displayAllocs.slice(0, 4).map(a => {
             const name = a.owner_name.length > 30 ? a.owner_name.slice(0,28)+'…' : a.owner_name;
             // הוספת מידע נותר אם רלוונטי
             let remHint = '';
@@ -2959,7 +2984,7 @@
             }
             return `<div style="font-size:0.75rem;opacity:0.9;">• ${name}: ${fmtSqm(a.area)}${remHint}</div>`;
           }).join('');
-          const more = status.allocs.length > 4 ? `<div style="font-size:0.7rem;opacity:0.7;">ועוד ${status.allocs.length - 4}…</div>` : '';
+          const more = displayAllocs.length > 4 ? `<div style="font-size:0.7rem;opacity:0.7;">ועוד ${displayAllocs.length - 4}…</div>` : '';
           allocsHtml = `<div class="ttl-divider"></div><div style="font-size:0.78rem;font-weight:600;margin-bottom:3px;">משובצים:</div>${summary}${more}`;
         }
 
