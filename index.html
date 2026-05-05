@@ -1697,6 +1697,12 @@
     if (equiv != null) rights.push(`<div class="tt-row"><span>⚖️ סה"כ יח"א מותאם</span><span class="tt-val">${equiv.toFixed(2)}</span></div>`);
     rights.push(`<div class="tt-row"><span>💰 שווי מגרש*</span><span class="tt-val">${formatNIS(lot.outgoingValue)}</span></div>`);
     rights.push(`<div class="tt-row"><span>📐 חקלאי נדרש</span><span class="tt-val">${formatSqm(lot.requiredIncomingArea)}</span></div>`);
+    // שטח חקלאי ליחידת דיור — חקלאי נדרש / (יח"ד בעלות + יח"ד השכרה), ללא תלות במסחר/תעסוקה
+    const totalHousingUnits = (lot.units || 0) + (lot.rentalUnits || 0);
+    if (totalHousingUnits > 0 && lot.requiredIncomingArea > 0) {
+      const areaPerUnit = lot.requiredIncomingArea / totalHousingUnits;
+      rights.push(`<div class="tt-row"><span>🏡 חקלאי ליח"ד דיור</span><span class="tt-val">${formatSqm(areaPerUnit)}</span></div>`);
+    }
 
     // אזהרת שלב ב' — מגרשים שאינם בתכנית בינוי שלב א'
     let phase2Warning = '';

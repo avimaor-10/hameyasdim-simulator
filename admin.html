@@ -1749,6 +1749,16 @@
     return netRegistered * getParcelFactor(owner.parcel);
   }
 
+  // מחזיר רשימת מספרי עסקאות שמחליפות (מקזזות) בעלים מסוים
+  function getOffsettingDealNumbers(owner) {
+    if (!owner) return [];
+    const dealIds = dealReplacementsByOwnerId.get(owner.id) || [];
+    return dealIds
+      .map(dealId => allDeals.find(d => d.id === dealId))
+      .filter(d => d && d.parcel === owner.parcel && d.deal_number != null)
+      .map(d => d.deal_number);
+  }
+
   // השטח המשתתף בהקצאה לעסקה (אחרי הצמצום)
   function getDealEffectiveArea(deal) {
     if (!deal) return 0;
@@ -2958,6 +2968,12 @@
           ? `<div style="margin-top:6px;padding:5px 7px;background:rgba(251,191,36,0.18);border-right:3px solid #fbbf24;border-radius:4px;font-size:0.78rem;color:#fbbf24;font-weight:600;">⚠ שלב ב' — אינו בתכנית בינוי שלב א'. דחייה למועד עבודות מטרו.</div>`
           : '';
 
+        // שטח חקלאי ליחידת דיור — חקלאי נדרש / (יח"ד בעלות + יח"ד השכרה), ללא תלות במסחר/תעסוקה
+        const totalHousingUnits = (lot.units || 0) + (lot.rentalUnits || 0);
+        const areaPerUnitRow = (totalHousingUnits > 0 && status.required > 0)
+          ? `<div class="ttl-row"><span class="ttl-label">שטח חקלאי ליח"ד דיור:</span><span class="ttl-value">${fmtSqm(status.required / totalHousingUnits)}</span></div>`
+          : '';
+
         tooltip.innerHTML = `
           <div class="ttl-title">מגרש ${lot.id} · ${statusLabel}</div>
           <div style="font-size:0.78rem;opacity:0.85;margin-bottom:4px;">${lot.use}</div>
@@ -2965,6 +2981,7 @@
           ${phase2Warning}
           <div class="ttl-divider"></div>
           <div class="ttl-row"><span class="ttl-label">שטח חקלאי נדרש:</span><span class="ttl-value">${fmtSqm(status.required)}</span></div>
+          ${areaPerUnitRow}
           <div class="ttl-row"><span class="ttl-label">הוקצה:</span><span class="ttl-value" style="color:#86efac;">${fmtSqm(status.allocated)}</span></div>
           <div class="ttl-row"><span class="ttl-label">נותר:</span><span class="ttl-value" style="color:${status.remaining > 0 ? '#fcd34d' : '#86efac'};">${status.remaining > 0 ? fmtSqm(status.remaining) : '✓ נעול'}</span></div>
           ${allocsHtml}
@@ -3441,12 +3458,29 @@
         <div class="modal-section-title">חברים בקבוצה — חתומים (${members.length}) + עסקאות (${memberDeals.length})</div>
         <div id="fam-members-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;">
           ${(members.length + memberDeals.length) === 0 ? '<div style="color:#9ca3af;padding:10px;">אין חברים עדיין</div>' : ''}
-          ${members.map(m => `
-            <div style="display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--border);">
-              <span><span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;font-size:0.72rem;font-weight:600;margin-left:4px;">🔵 חתום</span><strong>${m.owner_name}</strong> · ת.ז. ${m.id_number || '-'} · חלקה ${m.parcel} · ${fmtSqm(getOwnerEffectiveArea(m))}${getParcelFactor(m.parcel) < 0.999 ? ` <span style="color:#92400e;font-size:0.72rem;">(רשום ${fmtSqm(parseFloat(m.agreement_area) || 0)})</span>` : ''}</span>
-              <button class="btn-sm btn-reject" data-action="rm-member" data-id="${m.id}" style="padding:1px 8px;font-size:0.7rem;">✗ הסר</button>
-            </div>
-          `).join('')}
+          ${members.map(m => {
+            const stored = parseFloat(m.agreement_area) || 0;
+            const deduction = getOwnerRegisteredDeduction(m);
+            const isOffset = deduction > 0.01 && stored > 0;
+            const offsetDeals = isOffset ? getOffsettingDealNumbers(m) : [];
+            let areaDisplay;
+            if (isOffset && offsetDeals.length > 0) {
+              const dealLabel = offsetDeals.length === 1
+                ? `מקוזז ע"י עסקה #${offsetDeals[0]}`
+                : `מקוזז ע"י עסקאות #${offsetDeals.join(', #')}`;
+              areaDisplay = `<span style="color:#6b7280;">${fmtSqm(stored)}</span> <span style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-size:0.72rem;font-weight:600;margin-right:4px;">🔗 ${dealLabel}</span>`;
+            } else if (getParcelFactor(m.parcel) < 0.999) {
+              areaDisplay = `${fmtSqm(getOwnerEffectiveArea(m))} <span style="color:#92400e;font-size:0.72rem;">(רשום ${fmtSqm(stored)})</span>`;
+            } else {
+              areaDisplay = fmtSqm(getOwnerEffectiveArea(m));
+            }
+            return `
+              <div style="display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--border);">
+                <span><span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;font-size:0.72rem;font-weight:600;margin-left:4px;">🔵 חתום</span><strong>${m.owner_name}</strong> · ת.ז. ${m.id_number || '-'} · חלקה ${m.parcel} · ${areaDisplay}</span>
+                <button class="btn-sm btn-reject" data-action="rm-member" data-id="${m.id}" style="padding:1px 8px;font-size:0.7rem;">✗ הסר</button>
+              </div>
+            `;
+          }).join('')}
           ${memberDeals.map(d => {
             const catBadge = d.category === 'נדלן נדלן'
               ? '<span style="background:#fed7aa;color:#9a3412;padding:1px 5px;border-radius:3px;font-size:0.72rem;font-weight:600;margin-left:4px;">🏢 נדלן נדלן</span>'
