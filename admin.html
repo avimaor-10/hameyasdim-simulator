@@ -2076,8 +2076,8 @@
         .map(a => a.family_id)
     );
     let allocs = rawAllocs.filter(a => {
-      // הסתרת בחירות עצמיות (signed-self) עם 0 מ"ר — בחירות פנדינג לא הוקצו בפועל
-      if (a.source === 'signed-self' && (a.area || 0) === 0) {
+      // הסתרת רשומות בודדות עם 0 מ"ר (signed-self פנדינג / signed-admin ריק) — לא תורמות לתצוגה
+      if ((a.source === 'signed-self' || a.source === 'signed-admin') && (a.area || 0) === 0) {
         return false;
       }
       if (a.source === 'signed-admin' || a.source === 'signed-self') {
