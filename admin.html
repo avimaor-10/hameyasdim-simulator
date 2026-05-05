@@ -2944,15 +2944,26 @@
                           : status.status === 'partial' ? `⏳ חלקי ${pct}%`
                           : '○ פנוי';
         // ===== איחוד הקצאות לפי משפחה (לפני סינון קבוצת השותפות) =====
-        // הקצאות 'signed-admin' של חברים השייכים לקבוצת משפחה — נאחד אותן לרשומה אחת לכל משפחה.
-        // כך כל קבוצה תוצג ביחידה אחת ("שם המשפחה (X חברים)") ולא בפיצול של חברים בודדים.
+        // כל הקצאה (signed-admin / signed-self / nadlan / etc') של חבר השייך לקבוצת משפחה
+        // תאוחד לרשומה אחת לכל משפחה. כך כל קבוצה מוצגת ביחידה אחת ("שם המשפחה (X חברים)")
+        // ולא בפיצול של חברים בודדים.
         const familyAggMap = {}; // family_id -> aggregated entry
         const nonFamilyAllocs = [];
         (status.allocs || []).forEach(a => {
           let famId   = a.family_id || null;
           let famName = a.family_name || null;
-          if (!famId && a.source === 'signed-admin' && a.signed_owner_id) {
-            const owner = allSignedOwners.find(o => o.id === a.signed_owner_id);
+          // ניסיון לזהות את הבעלים גם עבור signed-admin (signed_owner_id) וגם signed-self (owner_name + owner_id)
+          if (!famId) {
+            let owner = null;
+            if (a.signed_owner_id) {
+              owner = allSignedOwners.find(o => o.id === a.signed_owner_id);
+            }
+            if (!owner && a.owner_name) {
+              // התאמה לפי שם + ת"ז (אם יש), אחרת לפי שם בלבד
+              owner = allSignedOwners.find(o =>
+                o.owner_name === a.owner_name && (!a.owner_id || String(o.id_number || '') === String(a.owner_id))
+              ) || allSignedOwners.find(o => o.owner_name === a.owner_name);
+            }
             if (owner && owner.family_group_id) {
               famId = owner.family_group_id;
               const fg = allFamilies.find(f => f.id === famId);
