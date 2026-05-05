@@ -2197,8 +2197,9 @@
 
     document.getElementById('lots-grid').innerHTML = lotsWithStatus.map(l => {
       const statusClass = l.status === 'locked' ? 'locked' : l.status === 'partial' ? 'partial' : 'empty';
+      // Math.floor במקום toFixed(0) כדי שמגרש שאינו נעול (99.6%) לא יוצג כ"100%"
       const statusBadge = l.status === 'locked' ? `<span class="lot-status-badge lot-status-locked">🔒 נעול 100%</span>`
-                       : l.status === 'partial' ? `<span class="lot-status-badge lot-status-partial">⏳ ${l.pct.toFixed(0)}%</span>`
+                       : l.status === 'partial' ? `<span class="lot-status-badge lot-status-partial">⏳ ${Math.floor(l.pct)}%</span>`
                        :                           `<span class="lot-status-badge lot-status-empty">○ ריק</span>`;
 
       const allocsHtml = l.allocs.length === 0
