@@ -2943,16 +2943,63 @@
         const statusLabel = status.status === 'locked' ? '🔒 נעול 100%'
                           : status.status === 'partial' ? `⏳ חלקי ${pct}%`
                           : '○ פנוי';
-        // רשימת משובצים — כולל "נותר" לבעלים בודד / למשפחה
-        // איחוד תת-קבוצות שותפות נדלן נדלן (חנן מור השקעות + 4 חברות פרטיות) לתצוגה אחת
-        // החלוקה הפנימית מנוהלת מאחורי הקלעים — בטולטיפ מוצגת רק הקבוצה כיחידה אחת
+        // ===== איחוד הקצאות לפי משפחה (לפני סינון קבוצת השותפות) =====
+        // הקצאות 'signed-admin' של חברים השייכים לקבוצת משפחה — נאחד אותן לרשומה אחת לכל משפחה.
+        // כך כל קבוצה תוצג ביחידה אחת ("שם המשפחה (X חברים)") ולא בפיצול של חברים בודדים.
+        const familyAggMap = {}; // family_id -> aggregated entry
+        const nonFamilyAllocs = [];
+        (status.allocs || []).forEach(a => {
+          let famId   = a.family_id || null;
+          let famName = a.family_name || null;
+          if (!famId && a.source === 'signed-admin' && a.signed_owner_id) {
+            const owner = allSignedOwners.find(o => o.id === a.signed_owner_id);
+            if (owner && owner.family_group_id) {
+              famId = owner.family_group_id;
+              const fg = allFamilies.find(f => f.id === famId);
+              famName = fg ? fg.family_name : 'משפחה';
+            }
+          }
+          if (famId) {
+            if (!familyAggMap[famId]) {
+              const famMembers = allSignedOwners.filter(s => s.family_group_id === famId);
+              const famDeals   = allDeals.filter(d => d.family_group_id === famId);
+              const famTotal   = famMembers.reduce((s, m) => s + getOwnerEffectiveArea(m), 0)
+                              + famDeals.reduce((s, d) => s + getDealEffectiveArea(d), 0);
+              const famAllocSigners = allSignedAllocations
+                .filter(x => famMembers.some(m => m.id === x.signed_owner_id))
+                .reduce((s, x) => s + (+x.allocated_area || 0), 0);
+              const famAllocDeals = allDealAllocations
+                .filter(x => famDeals.some(d => d.id === x.deal_id))
+                .reduce((s, x) => s + (+x.allocated_area || 0), 0);
+              const famAllocTotal = famAllocSigners + famAllocDeals;
+              familyAggMap[famId] = {
+                source: 'family',
+                owner_name: `${famName} (${famMembers.length + famDeals.length} חברים)`,
+                family_name: famName,
+                family_id: famId,
+                area: 0,
+                family_total_area: famTotal,
+                family_allocated_total: famAllocTotal,
+                family_remaining: famTotal - famAllocTotal,
+              };
+            }
+            familyAggMap[famId].area += (a.area || 0);
+          } else {
+            nonFamilyAllocs.push(a);
+          }
+        });
+        const consolidatedAllocs = [...Object.values(familyAggMap), ...nonFamilyAllocs];
+
+        // ===== איחוד תת-קבוצות שותפות נדלן נדלן לתצוגה אחת =====
+        // (רוכשי שותפות נדלן נדלן + חנן מור השקעות + 4 חברות פרטיות) → רשומה אחת
+        // החלוקה הפנימית מנוהלת מאחורי הקלעים, לא חשופה למשתמש
         const PARTNERSHIP_NAMES = [
           'רוכשי שותפות נדלן נדלן קבוצת מור',
           'קבוצת חנן מור השקעות',
           'קבוצת נדלן נדלן (4 חברות פרטיות)'
         ];
-        const partnershipAllocs = (status.allocs || []).filter(a => PARTNERSHIP_NAMES.includes(a.owner_name));
-        const otherAllocs       = (status.allocs || []).filter(a => !PARTNERSHIP_NAMES.includes(a.owner_name));
+        const partnershipAllocs = consolidatedAllocs.filter(a => PARTNERSHIP_NAMES.includes(a.family_name));
+        const otherAllocs       = consolidatedAllocs.filter(a => !PARTNERSHIP_NAMES.includes(a.family_name));
         let displayAllocs;
         if (partnershipAllocs.length > 0) {
           const totalArea = partnershipAllocs.reduce((s, a) => s + (a.area || 0), 0);
