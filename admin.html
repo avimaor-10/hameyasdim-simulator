@@ -3671,8 +3671,16 @@
       <div class="modal-section-title">הערה (אופציונלי)</div>
       <textarea id="fam-notes" placeholder="הערה...">${family ? (family.notes || '') : ''}</textarea>
 
-      ${!isNew ? `
-        <div class="modal-section-title">חברים בקבוצה — חתומים (${members.length}) + עסקאות (${memberDeals.length})</div>
+      ${!isNew ? (() => {
+        const signersAreaModal = members.reduce((s, m) => s + getOwnerEffectiveArea(m), 0);
+        const dealsAreaModal = memberDeals.reduce((s, d) => s + getDealEffectiveArea(d), 0);
+        const totalAreaModal = signersAreaModal + dealsAreaModal;
+        return `
+        <div class="modal-section-title">
+          חברים בקבוצה — חתומים (${members.length} · ${fmtSqm(signersAreaModal)})
+          + עסקאות (${memberDeals.length} · ${fmtSqm(dealsAreaModal)})
+          · <strong style="color:var(--success);">סה"כ ${fmtSqm(totalAreaModal)}</strong>
+        </div>
         <div id="fam-members-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;">
           ${(members.length + memberDeals.length) === 0 ? '<div style="color:#9ca3af;padding:10px;">אין חברים עדיין</div>' : ''}
           ${members.map(m => {
@@ -3718,7 +3726,8 @@
         <div class="modal-section-title">הוסף עסקאות — נדלן נדלן או דודי יצחקי</div>
         <input type="text" id="fam-add-deal-search" placeholder="חפש שם עסקה / חלקה..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;">
         <div id="fam-add-deal-results" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:6px;display:none;"></div>
-      ` : ''}
+        `;
+      })() : ''}
 
       <div class="modal-actions">
         <button class="btn-sm btn-approve" id="fam-save-btn">💾 ${isNew ? 'צור קבוצה' : 'שמור שינויים'}</button>
