@@ -2531,8 +2531,9 @@
               .filter(a => memberIds.has(a.signed_owner_id))
               .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
             const signedRemaining = Math.max(0, signedTotal - signedAllocated);
-            // עסקאות עצמאיות (כובע 2) — רק עסקאות ב-category='משפחתי'
-            const groupDeals = allDeals.filter(d => d.family_group_id === fg.id && d.category === 'משפחתי');
+            // כל העסקאות של הקבוצה — מאחר ו"רוכשי שותפות" כבר מסוננת לפי שם,
+            // כל קבוצה שמופיעה ברשימה היא עצמאית וכל העסקאות שלה זמינות.
+            const groupDeals = allDeals.filter(d => d.family_group_id === fg.id);
             const dealsRemaining = groupDeals.reduce((sum, d) => {
               const used = allDealAllocations
                 .filter(a => a.deal_id === d.id)
@@ -2576,8 +2577,8 @@
         .filter(a => memberIds.has(a.signed_owner_id))
         .reduce((sum, a) => sum + (+a.allocated_area || 0), 0);
       const signedRemaining = Math.max(0, signedTotal - signedAllocated);
-      // עסקאות עצמאיות (כובע 2) — category='משפחתי' בלבד
-      const groupDeals = allDeals.filter(d => d.family_group_id === fg.id && d.category === 'משפחתי');
+      // כל העסקאות של הקבוצה — מאחר ו"רוכשי שותפות" כבר מסוננת לפי שם.
+      const groupDeals = allDeals.filter(d => d.family_group_id === fg.id);
       let dealsTotal = 0, dealsAllocated = 0;
       groupDeals.forEach(d => {
         dealsTotal += getDealEffectiveArea(d);
@@ -2722,10 +2723,9 @@
 
       const family = allFamilies.find(f => f.id === familyId);
       const members = allSignedOwners.filter(s => s.family_group_id === familyId);
-      // רק עסקאות עצמאיות (כובע 2) — category='משפחתי'.
-      // עסקאות 5% (כובע 1, category='נדלן נדלן'/'דודי יצחקי') לא נכללות בהקצאה דרך הקבוצה,
-      // הן מוקצות אוטומטית רק במסגרת השותפות.
-      const memberDeals = allDeals.filter(d => d.family_group_id === familyId && d.category === 'משפחתי');
+      // כל העסקאות של הקבוצה — "רוכשי שותפות" כבר מסוננת לפי שם בלוגיקת התצוגה,
+      // לכן כל קבוצה שזמינה כאן היא עצמאית וכל העסקאות שלה ניתנות להקצאה.
+      const memberDeals = allDeals.filter(d => d.family_group_id === familyId);
 
       if (members.length === 0 && memberDeals.length === 0) {
         alert('אין חברים או עסקאות בקבוצה');
