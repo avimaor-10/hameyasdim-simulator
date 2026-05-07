@@ -1063,6 +1063,10 @@
       <div class="label">ללא קבוצת משפחה</div>
       <div class="value" id="stat-signed-no-family">-</div>
     </div>
+    <div class="stat-card" style="background:#eff6ff;border-color:#3b82f6;" title="רוכשי יחידות שותפות (דודי יצחקי + נדלן נדלן). מטופלים כמקשה אחת לטובת ההקצאה.">
+      <div class="label">🏢 רוכשי יחידות שותפות</div>
+      <div class="value" id="stat-signed-partnership-units" style="font-size:1.2rem;">-</div>
+    </div>
   </div>
 
   <div class="filters-bar" style="flex-wrap:wrap;">
@@ -1089,6 +1093,14 @@
       <option value="לקוח מקור">לקוח מקור</option>
       <option value="מיוצג הרצוג">מיוצג הרצוג</option>
       <option value="__none__">ללא סיווג מנדיי</option>
+    </select>
+    <select id="signed-category-filter">
+      <option value="">— קטגוריית בעלות —</option>
+      <option value="signed_with_us">🟢 חתום על הסכם ניהול</option>
+      <option value="partnership_buyer">🔵 רוכש שותפות</option>
+      <option value="in_court_dispute">🟠 בסכסוך משפטי</option>
+      <option value="not_signed_in_unification">🟡 לא חתום באיחוד</option>
+      <option value="inheritor_pending">🟣 יורש בהמתנה</option>
     </select>
     <button id="signed-refresh-btn" class="btn-sm btn-view">🔄 רענן</button>
     <button id="signed-export-btn" class="btn-export">📥 ייצוא CSV</button>
@@ -4080,8 +4092,18 @@
   // ============================================================
   // טאב 4: רשימת חתומים — מרכז המידע של בעלי הזכויות שחתומים איתנו
   // ============================================================
-  let allSignedListData = []; // נתונים מאוחדים לתצוגה
+  let allSignedListData = []; // נתונים מאוחדים לתצוגה (אחרי סינון יחידות שותפות)
   let allSignedListFamilies = []; // קבוצות משפחה (להצגה בעמודה ובמסנן)
+  let signedListAggregateStats = {  // סטטיסטיקה אגרגטיבית של רוכשי יחידות
+    partnership_units_count: 0,
+    partnership_units_area: 0,
+  };
+
+  // family_group_id של רוכשי יחידות שותפות — מסתירים מהרשימה הראשית
+  const HIDDEN_PARTNERSHIP_GROUP_IDS = new Set([
+    'a990ed96-5b11-4d1a-9db1-89c76833af8b', // רוכשי קבוצת דודי יצחקי (21 חברים)
+    '50ee16ff-4025-479d-af57-9f56d0489305', // רוכשי שותפות נדלן נדלן קבוצת מור
+  ]);
 
   async function loadSignedList() {
     const container = document.getElementById('signed-list-container');
@@ -4107,7 +4129,28 @@
     families.forEach(f => { familyById[f.id] = f; });
 
     allSignedListFamilies = families;
-    allSignedListData = signed.map(s => {
+
+    // סינון: מסתיר חברי קבוצות רוכשי יחידות שותפות (דודי יצחקי, נדלן נדלן)
+    // הם נשארים במסד אבל לא מציגים אותם פירוט-פירוט במסך הראשי
+    const hiddenRecords = signed.filter(s => HIDDEN_PARTNERSHIP_GROUP_IDS.has(s.family_group_id));
+    const visibleRecords = signed.filter(s => !HIDDEN_PARTNERSHIP_GROUP_IDS.has(s.family_group_id));
+
+    // חישוב הסטטיסטיקה האגרגטיבית של היחידות המוסתרות
+    const hiddenIds = new Set(hiddenRecords.map(r => r.id_number).filter(Boolean));
+    let hiddenArea = 0;
+    hiddenRecords.forEach(s => {
+      const parcelMeta = parcelsMetaIdx[s.parcel];
+      const factor = parcelMeta?.participation_factor != null ? parseFloat(parcelMeta.participation_factor) : 1;
+      const stored = parseFloat(s.agreement_area) || parseFloat(s.unification_area) || 0;
+      hiddenArea += stored * factor;
+    });
+    signedListAggregateStats = {
+      partnership_units_count: hiddenIds.size,
+      partnership_units_area: hiddenArea,
+      partnership_units_records: hiddenRecords.length,
+    };
+
+    allSignedListData = visibleRecords.map(s => {
       const fam = s.family_group_id ? familyById[s.family_group_id] : null;
       const parcelMeta = parcelsMetaIdx[s.parcel];
       const factor = parcelMeta?.participation_factor != null ? parseFloat(parcelMeta.participation_factor) : 1;
@@ -4123,6 +4166,8 @@
         family_id: s.family_group_id,
         family_name: fam ? fam.family_name : null,
         family_color: fam ? fam.color : null,
+        // קטגוריית בעלות
+        ownership_category: s.ownership_category || 'signed_with_us',
         // שדות אימות מאסטר 2015
         master2015: s.master_2015_status || 'not_checked',
         master2015_folder: s.master_2015_folder || '',
@@ -4193,6 +4238,11 @@
     document.getElementById('stat-signed-master-verified').textContent = masterVerified;
     document.getElementById('stat-signed-no-monday').textContent = noMonday;
     document.getElementById('stat-signed-no-family').textContent = noFam;
+    // יחידות שותפות (אגרגטיבי, לא מציגים פירוט)
+    const pu = signedListAggregateStats;
+    const areaFmt = pu.partnership_units_area ? Math.round(pu.partnership_units_area).toLocaleString('he-IL') + ' מ"ר' : '0 מ"ר';
+    document.getElementById('stat-signed-partnership-units').innerHTML =
+      `${pu.partnership_units_count}<div style="font-size:0.7rem;color:#6b7280;margin-top:4px;">${areaFmt}</div>`;
   }
 
   function applySignedFilters() {
@@ -4202,11 +4252,13 @@
     const masterFilter = document.getElementById('signed-master-filter').value;
     const legalFilter = document.getElementById('signed-legal-filter').value;
     const mondayFilter = document.getElementById('signed-monday-filter').value;
+    const categoryFilter = document.getElementById('signed-category-filter').value;
     return allSignedListData.filter(d => {
       if (search && !(d.owner_name.toLowerCase().includes(search) || (d.id_number || '').includes(search))) return false;
       if (famFilter && d.family_id !== famFilter) return false;
       if (parcelFilter && String(d.parcel) !== String(parcelFilter)) return false;
       if (masterFilter && d.master2015 !== masterFilter) return false;
+      if (categoryFilter && d.ownership_category !== categoryFilter) return false;
       if (legalFilter && d.legal_status !== legalFilter) return false;
       if (mondayFilter) {
         if (mondayFilter === '__none__') {
@@ -4236,6 +4288,18 @@
     return `<span style="display:inline-block;padding:2px 6px;border-radius:8px;background:#dcfce7;color:#166534;font-size:0.78rem;">${escHtml(t)}</span>`;
   }
 
+  function categoryBadge(c) {
+    const map = {
+      signed_with_us:           {bg:'#dcfce7', fg:'#166534', icon:'🟢', label:'חתום'},
+      partnership_buyer:        {bg:'#dbeafe', fg:'#1e40af', icon:'🔵', label:'רוכש שותפות'},
+      in_court_dispute:         {bg:'#ffedd5', fg:'#9a3412', icon:'🟠', label:'בסכסוך משפטי'},
+      not_signed_in_unification:{bg:'#fef9c3', fg:'#854d0e', icon:'🟡', label:'לא חתום באיחוד'},
+      inheritor_pending:        {bg:'#f3e8ff', fg:'#6b21a8', icon:'🟣', label:'יורש בהמתנה'},
+    };
+    const m = map[c] || map.signed_with_us;
+    return `<span style="display:inline-block;padding:2px 6px;border-radius:8px;background:${m.bg};color:${m.fg};font-size:0.78rem;white-space:nowrap;" title="${m.label}">${m.icon} ${m.label}</span>`;
+  }
+
   function renderSignedList() {
     const container = document.getElementById('signed-list-container');
     const rows = applySignedFilters();
@@ -4254,6 +4318,7 @@
             <th style="padding:10px;text-align:center;">חלקה</th>
             <th style="padding:10px;text-align:center;" title="שטח אחרי מקדם השמאי לחלקות חלקיות">שטח לאיחוד</th>
             <th style="padding:10px;text-align:right;">קבוצה</th>
+            <th style="padding:10px;text-align:center;" title="קטגוריית בעלות במערכת">קטגוריה</th>
             <th style="padding:10px;text-align:center;">סיווג מנדיי</th>
             <th style="padding:10px;text-align:center;" title="הצלבה מול תיקיית הסכמי 2015">מאסטר 2015</th>
             <th style="padding:10px;text-align:right;">טלפון</th>
@@ -4276,6 +4341,7 @@
           <td style="padding:8px 10px;text-align:center;">${d.parcel || '—'}</td>
           <td style="padding:8px 10px;text-align:center;font-weight:600;">${fmt(d.effective_area)}</td>
           <td style="padding:8px 10px;">${famBadge}</td>
+          <td style="padding:8px 10px;text-align:center;">${categoryBadge(d.ownership_category)}</td>
           <td style="padding:8px 10px;text-align:center;">${mondayTypeBadge(d.monday_customer_type)}</td>
           <td style="padding:8px 10px;text-align:center;font-size:0.85rem;">${masterStatusBadge(d.master2015)}</td>
           <td style="padding:8px 10px;color:${d.phone_primary ? '#1f2937' : '#9ca3af'};font-size:0.85rem;">${escHtml(d.phone_primary) || '—'}</td>
@@ -4340,10 +4406,17 @@
           </div>
         </div>
         <div style="background:#fee2e2;padding:12px;border-radius:6px;">
-          <div style="font-weight:600;color:#374151;margin-bottom:8px;">⚖ סטטוס משפטי</div>
+          <div style="font-weight:600;color:#374151;margin-bottom:8px;">⚖ סטטוס משפטי + קטגוריית בעלות</div>
           <div style="display:grid;gap:6px;">
+            <select id="sd-ownership-category" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font-weight:500;">
+              <option value="signed_with_us" ${d.ownership_category === 'signed_with_us' ? 'selected' : ''}>🟢 חתום על הסכם ניהול</option>
+              <option value="partnership_buyer" ${d.ownership_category === 'partnership_buyer' ? 'selected' : ''}>🔵 רוכש שותפות (חנן מור)</option>
+              <option value="in_court_dispute" ${d.ownership_category === 'in_court_dispute' ? 'selected' : ''}>🟠 בסכסוך משפטי איתנו</option>
+              <option value="not_signed_in_unification" ${d.ownership_category === 'not_signed_in_unification' ? 'selected' : ''}>🟡 לא חתום אבל באיחוד וחלוקה</option>
+              <option value="inheritor_pending" ${d.ownership_category === 'inheritor_pending' ? 'selected' : ''}>🟣 יורש שטרם הצטרף רשמית</option>
+            </select>
             <select id="sd-legal-status" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
-              <option value="normal" ${d.legal_status === 'normal' ? 'selected' : ''}>רגיל</option>
+              <option value="normal" ${d.legal_status === 'normal' ? 'selected' : ''}>רגיל (ללא בוררות)</option>
               <option value="arbitration" ${d.legal_status === 'arbitration' ? 'selected' : ''}>⚖ בבוררות הרצוג</option>
             </select>
             <label style="display:flex;align-items:center;gap:6px;font-size:0.9rem;">
@@ -4396,6 +4469,7 @@
       master_2015_folder: document.getElementById('sd-master-folder').value.trim() || null,
       master_2015_notes: document.getElementById('sd-master-notes').value.trim() || null,
       legal_status: document.getElementById('sd-legal-status').value,
+      ownership_category: document.getElementById('sd-ownership-category').value,
       did_partnership_deal: document.getElementById('sd-did-deal').checked,
       legal_notes: document.getElementById('sd-legal-notes').value.trim() || null,
       representative_name: document.getElementById('sd-rep-name').value.trim() || null,
@@ -4465,6 +4539,7 @@
   document.getElementById('signed-master-filter').addEventListener('change', () => renderSignedList());
   document.getElementById('signed-legal-filter').addEventListener('change', () => renderSignedList());
   document.getElementById('signed-monday-filter').addEventListener('change', () => renderSignedList());
+  document.getElementById('signed-category-filter').addEventListener('change', () => renderSignedList());
   document.getElementById('signed-refresh-btn').addEventListener('click', loadSignedList);
   document.getElementById('signed-export-btn').addEventListener('click', exportSignedListCSV);
   // סגירת מודאל בלחיצה על הרקע
