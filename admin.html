@@ -1781,6 +1781,9 @@
       if (tabName === 'allocations' && Object.keys(allocationsByLot).length === 0) {
         loadAllocations();
       }
+      if (tabName === 'families') {
+        loadFamilies();
+      }
     });
   });
 
@@ -3990,10 +3993,7 @@
     if (family) openFamilyModal(family.id);
   }
 
-  // טוען משפחות גם כשנכנסים לטאב הזה
-  document.querySelector('[data-tab="families"]').addEventListener('click', () => {
-    if (allFamilies.length === 0) loadFamilies();
-  });
+  // הערה: טעינת משפחות מתבצעת ב-tab switcher הראשי (ראה למעלה).
 
   // אירועי טאב המשפחות
   document.getElementById('family-search').addEventListener('input', () => {
