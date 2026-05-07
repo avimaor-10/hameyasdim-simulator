@@ -811,6 +811,7 @@
   <button class="tab-btn active" data-tab="users">👥 ניהול משתמשים</button>
   <button class="tab-btn" data-tab="allocations">🎯 שיבוץ מגרשים</button>
   <button class="tab-btn" data-tab="families">👨‍👩‍👧 קבוצות משפחה</button>
+  <button class="tab-btn" data-tab="signed-list">📋 רשימת חתומים</button>
 </nav>
 
 <!-- ============================================================ -->
@@ -1035,6 +1036,61 @@
   </div>
 </div>
 </div><!-- /tab-families -->
+
+<!-- ============================================================ -->
+<!-- טאב 4: רשימת חתומים — תצוגה מאוחדת של כל בעלי הקרקע            -->
+<!-- ============================================================ -->
+<div class="tab-content" id="tab-signed-list">
+<div class="container">
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">סה"כ חתומים פעילים</div>
+      <div class="value" id="stat-signed-total">-</div>
+    </div>
+    <div class="stat-card approved">
+      <div class="label">משויכים לקבוצת משפחה</div>
+      <div class="value" id="stat-signed-with-family">-</div>
+    </div>
+    <div class="stat-card pending">
+      <div class="label">ללא קבוצת משפחה</div>
+      <div class="value" id="stat-signed-no-family">-</div>
+    </div>
+    <div class="stat-card info" title="נספר לפי בעלים שיש להם רישום הסכם 2015 שאומת. כרגע השדה ריק — נמלא אחרי הצלבת התיקייה.">
+      <div class="label">אומתו מול מאסטר 2015</div>
+      <div class="value" id="stat-signed-master-verified">0</div>
+    </div>
+    <div class="stat-card gold" title="נספר לפי בעלים שיש להם פרטי קשר במערכת. כרגע ריק.">
+      <div class="label">עם פרטי קשר</div>
+      <div class="value" id="stat-signed-with-contact">0</div>
+    </div>
+  </div>
+
+  <div class="filters-bar">
+    <input type="text" id="signed-search" placeholder="🔍 חיפוש לפי שם או ת.ז...">
+    <select id="signed-family-filter">
+      <option value="">— כל הקבוצות —</option>
+    </select>
+    <select id="signed-parcel-filter">
+      <option value="">— כל החלקות —</option>
+    </select>
+    <select id="signed-master-filter">
+      <option value="">— סטטוס מאסטר 2015 —</option>
+      <option value="verified">✓ אומת</option>
+      <option value="not_verified">❌ לא אומת</option>
+      <option value="not_checked">❓ לא נבדק</option>
+    </select>
+    <button id="signed-refresh-btn" class="btn-sm btn-view">🔄 רענן</button>
+    <button id="signed-export-btn" class="btn-export">📥 ייצוא CSV</button>
+  </div>
+
+  <div id="signed-list-container">
+    <div style="text-align:center;padding:40px;">
+      <div class="spinner"></div>
+      <div style="margin-top:8px;color:#9ca3af;">טוען רשימת חתומים...</div>
+    </div>
+  </div>
+</div>
+</div><!-- /tab-signed-list -->
 
 <!-- מודאל ניהול קבוצת משפחה -->
 <div class="modal-overlay" id="family-modal">
@@ -1783,6 +1839,9 @@
       }
       if (tabName === 'families') {
         loadFamilies();
+      }
+      if (tabName === 'signed-list') {
+        loadSignedList();
       }
     });
   });
@@ -4001,6 +4060,214 @@
   });
   document.getElementById('add-family-btn').addEventListener('click', () => openFamilyModal(null));
   document.getElementById('fam-refresh-btn').addEventListener('click', loadFamilies);
+
+  // ============================================================
+  // טאב 4: רשימת חתומים — מרכז המידע של בעלי הזכויות שחתומים איתנו
+  // ============================================================
+  let allSignedListData = []; // נתונים מאוחדים לתצוגה
+  let allSignedListFamilies = []; // קבוצות משפחה (להצגה בעמודה ובמסנן)
+
+  async function loadSignedList() {
+    const container = document.getElementById('signed-list-container');
+    container.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner"></div><div style="margin-top:8px;color:#9ca3af;">טוען רשימת חתומים...</div></div>`;
+
+    const [signedRes, famRes, parcelsMetaRes] = await Promise.all([
+      supabase.from('signed_owners').select('*').eq('is_active', true).order('owner_name'),
+      supabase.from('family_groups').select('*').eq('is_active', true).order('family_name'),
+      supabase.from('parcels_meta').select('*').order('parcel'),
+    ]);
+
+    if (signedRes.error) {
+      container.innerHTML = `<div style="color:#dc2626;text-align:center;padding:30px;">שגיאה: ${signedRes.error.message}</div>`;
+      return;
+    }
+
+    const signed = signedRes.data || [];
+    const families = famRes.data || [];
+    const parcelsMeta = parcelsMetaRes.data || [];
+    const parcelsMetaIdx = {};
+    parcelsMeta.forEach(p => { parcelsMetaIdx[p.parcel] = p; });
+    const familyById = {};
+    families.forEach(f => { familyById[f.id] = f; });
+
+    allSignedListFamilies = families;
+    allSignedListData = signed.map(s => {
+      const fam = s.family_group_id ? familyById[s.family_group_id] : null;
+      const parcelMeta = parcelsMetaIdx[s.parcel];
+      const factor = parcelMeta?.participation_factor != null ? parseFloat(parcelMeta.participation_factor) : 1;
+      const stored = parseFloat(s.agreement_area) || parseFloat(s.unification_area) || 0;
+      const effectiveArea = stored * factor;
+      // שדות placeholder עתידיים (עוד לא קיימים בטבלה — יתווספו בעדכון הבא)
+      const master2015 = s.master_2015_status || 'not_checked';
+      const repName = s.representative_name || null;
+      const phone = s.phone_primary || null;
+      const email = s.email || null;
+      return {
+        id: s.id,
+        owner_name: s.owner_name || '',
+        id_number: s.id_number || '',
+        parcel: s.parcel || '',
+        registered_area: stored,
+        effective_area: effectiveArea,
+        family_id: s.family_group_id,
+        family_name: fam ? fam.family_name : null,
+        family_color: fam ? fam.color : null,
+        master2015,
+        repName,
+        phone,
+        email,
+        notes: s.notes || '',
+        raw: s,
+      };
+    });
+
+    // אכלוס מסננים (פעם אחת)
+    populateSignedFilters(families, parcelsMeta);
+
+    // עדכון סטטיסטיקות
+    updateSignedStats();
+
+    // רינדור
+    renderSignedList();
+  }
+
+  function populateSignedFilters(families, parcelsMeta) {
+    const famSel = document.getElementById('signed-family-filter');
+    const parcelSel = document.getElementById('signed-parcel-filter');
+    if (famSel.options.length <= 1) {
+      families.forEach(f => {
+        const o = document.createElement('option');
+        o.value = f.id; o.textContent = f.family_name;
+        famSel.appendChild(o);
+      });
+    }
+    if (parcelSel.options.length <= 1) {
+      const usedParcels = [...new Set(allSignedListData.map(d => d.parcel))].filter(Boolean).sort((a,b) => a-b);
+      usedParcels.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p; o.textContent = `חלקה ${p}`;
+        parcelSel.appendChild(o);
+      });
+    }
+  }
+
+  function updateSignedStats() {
+    const total = allSignedListData.length;
+    const withFam = allSignedListData.filter(d => d.family_id).length;
+    const noFam = total - withFam;
+    const masterVerified = allSignedListData.filter(d => d.master2015 === 'verified').length;
+    const withContact = allSignedListData.filter(d => d.phone || d.email).length;
+    document.getElementById('stat-signed-total').textContent = total;
+    document.getElementById('stat-signed-with-family').textContent = withFam;
+    document.getElementById('stat-signed-no-family').textContent = noFam;
+    document.getElementById('stat-signed-master-verified').textContent = masterVerified;
+    document.getElementById('stat-signed-with-contact').textContent = withContact;
+  }
+
+  function applySignedFilters() {
+    const search = (document.getElementById('signed-search').value || '').trim().toLowerCase();
+    const famFilter = document.getElementById('signed-family-filter').value;
+    const parcelFilter = document.getElementById('signed-parcel-filter').value;
+    const masterFilter = document.getElementById('signed-master-filter').value;
+    return allSignedListData.filter(d => {
+      if (search && !(d.owner_name.toLowerCase().includes(search) || (d.id_number || '').includes(search))) return false;
+      if (famFilter && d.family_id !== famFilter) return false;
+      if (parcelFilter && String(d.parcel) !== String(parcelFilter)) return false;
+      if (masterFilter && d.master2015 !== masterFilter) return false;
+      return true;
+    });
+  }
+
+  function masterStatusBadge(status) {
+    if (status === 'verified') return '<span style="color:#16a34a;font-weight:600;">✓ אומת</span>';
+    if (status === 'not_verified') return '<span style="color:#dc2626;font-weight:600;">❌ לא אומת</span>';
+    return '<span style="color:#9ca3af;">❓ לא נבדק</span>';
+  }
+
+  function renderSignedList() {
+    const container = document.getElementById('signed-list-container');
+    const rows = applySignedFilters();
+    if (rows.length === 0) {
+      container.innerHTML = `<div style="text-align:center;padding:40px;color:#6b7280;">לא נמצאו תוצאות לפי המסננים</div>`;
+      return;
+    }
+    const fmt = n => n ? Number(n).toLocaleString('he-IL', {maximumFractionDigits: 2}) : '—';
+    let html = `
+      <div style="overflow-x:auto;background:#fff;border-radius:8px;border:1px solid #e5e7eb;">
+      <table class="data-table" style="width:100%;border-collapse:collapse;font-size:0.92rem;">
+        <thead style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+          <tr>
+            <th style="padding:10px;text-align:right;">שם</th>
+            <th style="padding:10px;text-align:right;">ת.ז</th>
+            <th style="padding:10px;text-align:center;">חלקה</th>
+            <th style="padding:10px;text-align:center;" title="שטח רשום בטאבו">שטח רשום</th>
+            <th style="padding:10px;text-align:center;" title="שטח אחרי מקדם השמאי לחלקות חלקיות">שטח לאיחוד</th>
+            <th style="padding:10px;text-align:right;">קבוצת משפחה</th>
+            <th style="padding:10px;text-align:center;" title="הצלבה מול תיקיית הסכמי 2015">מאסטר 2015</th>
+            <th style="padding:10px;text-align:right;">נציג</th>
+            <th style="padding:10px;text-align:right;">טלפון</th>
+            <th style="padding:10px;text-align:right;">מייל</th>
+            <th style="padding:10px;text-align:right;">הערות</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    rows.forEach(d => {
+      const famBadge = d.family_name
+        ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${d.family_color || '#e5e7eb'};color:#fff;font-size:0.85rem;">${d.family_name}</span>`
+        : '<span style="color:#9ca3af;">—</span>';
+      html += `
+        <tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:8px 10px;font-weight:500;">${d.owner_name}</td>
+          <td style="padding:8px 10px;color:#6b7280;font-family:monospace;">${d.id_number || '—'}</td>
+          <td style="padding:8px 10px;text-align:center;">${d.parcel || '—'}</td>
+          <td style="padding:8px 10px;text-align:center;color:#6b7280;">${fmt(d.registered_area)}</td>
+          <td style="padding:8px 10px;text-align:center;font-weight:600;">${fmt(d.effective_area)}</td>
+          <td style="padding:8px 10px;">${famBadge}</td>
+          <td style="padding:8px 10px;text-align:center;">${masterStatusBadge(d.master2015)}</td>
+          <td style="padding:8px 10px;color:${d.repName ? '#1f2937' : '#9ca3af'};">${d.repName || '—'}</td>
+          <td style="padding:8px 10px;color:${d.phone ? '#1f2937' : '#9ca3af'};">${d.phone || '—'}</td>
+          <td style="padding:8px 10px;color:${d.email ? '#1f2937' : '#9ca3af'};font-size:0.85rem;">${d.email || '—'}</td>
+          <td style="padding:8px 10px;color:#6b7280;font-size:0.85rem;max-width:200px;">${d.notes ? d.notes.substring(0,80) + (d.notes.length > 80 ? '...' : '') : '—'}</td>
+        </tr>
+      `;
+    });
+    html += `</tbody></table></div>
+      <div style="margin-top:10px;color:#6b7280;font-size:0.85rem;">סה"כ ${rows.length} מתוך ${allSignedListData.length} חתומים</div>`;
+    container.innerHTML = html;
+  }
+
+  function exportSignedListCSV() {
+    const rows = applySignedFilters();
+    if (rows.length === 0) { alert('אין מה לייצא'); return; }
+    const header = ['שם','ת.ז','חלקה','שטח רשום','שטח לאיחוד','קבוצת משפחה','מאסטר 2015','נציג','טלפון','מייל','הערות'];
+    const csvRows = [header.join(',')];
+    rows.forEach(d => {
+      const fields = [
+        d.owner_name, d.id_number, d.parcel,
+        d.registered_area || '', d.effective_area ? d.effective_area.toFixed(2) : '',
+        d.family_name || '', d.master2015,
+        d.repName || '', d.phone || '', d.email || '',
+        (d.notes || '').replace(/[\r\n]+/g, ' ').replace(/"/g, '""'),
+      ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`);
+      csvRows.push(fields.join(','));
+    });
+    const csv = '﻿' + csvRows.join('\n'); // BOM ל-Excel
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `signed-owners-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // אירועי הטאב
+  document.getElementById('signed-search').addEventListener('input', () => renderSignedList());
+  document.getElementById('signed-family-filter').addEventListener('change', () => renderSignedList());
+  document.getElementById('signed-parcel-filter').addEventListener('change', () => renderSignedList());
+  document.getElementById('signed-master-filter').addEventListener('change', () => renderSignedList());
+  document.getElementById('signed-refresh-btn').addEventListener('click', loadSignedList);
+  document.getElementById('signed-export-btn').addEventListener('click', exportSignedListCSV);
 
   // טעינה ראשונית
   await loadData();
