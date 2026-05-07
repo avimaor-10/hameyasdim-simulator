@@ -1044,28 +1044,28 @@
 <div class="container">
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="label">סה"כ חתומים פעילים</div>
+      <div class="label">סה"כ רשומות חתומים</div>
       <div class="value" id="stat-signed-total">-</div>
     </div>
-    <div class="stat-card approved">
-      <div class="label">משויכים לקבוצת משפחה</div>
-      <div class="value" id="stat-signed-with-family">-</div>
+    <div class="stat-card rejected" title="לקוחות מקור שמיוצגים על ידי משרד הרצוג ונמצאים בבוררות איתנו על תוקף הסכם הניהול. עמדתנו: ההסכם תקף.">
+      <div class="label">⚖ בבוררות הרצוג</div>
+      <div class="value" id="stat-signed-arbitration">0</div>
     </div>
-    <div class="stat-card pending">
+    <div class="stat-card approved" title="רשומות עם רישום מאומת מול תיקיית הסכמי 2015.">
+      <div class="label">✓ אומתו מאסטר 2015</div>
+      <div class="value" id="stat-signed-master-verified">0</div>
+    </div>
+    <div class="stat-card pending" title="רשומות בלי סיווג מנדיי — ייתכן יורשים שלא נכנסו עדיין למנדיי או בעלים שמכרו לשותפות.">
+      <div class="label">ללא נתוני מנדיי</div>
+      <div class="value" id="stat-signed-no-monday">0</div>
+    </div>
+    <div class="stat-card info" title="רשומות שלא משויכות לאף קבוצת משפחה.">
       <div class="label">ללא קבוצת משפחה</div>
       <div class="value" id="stat-signed-no-family">-</div>
     </div>
-    <div class="stat-card info" title="נספר לפי בעלים שיש להם רישום הסכם 2015 שאומת. כרגע השדה ריק — נמלא אחרי הצלבת התיקייה.">
-      <div class="label">אומתו מול מאסטר 2015</div>
-      <div class="value" id="stat-signed-master-verified">0</div>
-    </div>
-    <div class="stat-card gold" title="נספר לפי בעלים שיש להם פרטי קשר במערכת. כרגע ריק.">
-      <div class="label">עם פרטי קשר</div>
-      <div class="value" id="stat-signed-with-contact">0</div>
-    </div>
   </div>
 
-  <div class="filters-bar">
+  <div class="filters-bar" style="flex-wrap:wrap;">
     <input type="text" id="signed-search" placeholder="🔍 חיפוש לפי שם או ת.ז...">
     <select id="signed-family-filter">
       <option value="">— כל הקבוצות —</option>
@@ -1079,6 +1079,17 @@
       <option value="not_verified">❌ לא אומת</option>
       <option value="not_checked">❓ לא נבדק</option>
     </select>
+    <select id="signed-legal-filter">
+      <option value="">— סטטוס משפטי —</option>
+      <option value="normal">רגיל</option>
+      <option value="arbitration">⚖ בבוררות הרצוג</option>
+    </select>
+    <select id="signed-monday-filter">
+      <option value="">— סיווג מנדיי —</option>
+      <option value="לקוח מקור">לקוח מקור</option>
+      <option value="מיוצג הרצוג">מיוצג הרצוג</option>
+      <option value="__none__">ללא סיווג מנדיי</option>
+    </select>
     <button id="signed-refresh-btn" class="btn-sm btn-view">🔄 רענן</button>
     <button id="signed-export-btn" class="btn-export">📥 ייצוא CSV</button>
   </div>
@@ -1091,6 +1102,11 @@
   </div>
 </div>
 </div><!-- /tab-signed-list -->
+
+<!-- מודאל פרטי בעל קרקע (תצוגה ועריכה) -->
+<div class="modal-overlay" id="signed-detail-modal">
+  <div class="modal" id="signed-detail-content" style="max-width:900px;"></div>
+</div>
 
 <!-- מודאל ניהול קבוצת משפחה -->
 <div class="modal-overlay" id="family-modal">
@@ -4097,11 +4113,6 @@
       const factor = parcelMeta?.participation_factor != null ? parseFloat(parcelMeta.participation_factor) : 1;
       const stored = parseFloat(s.agreement_area) || parseFloat(s.unification_area) || 0;
       const effectiveArea = stored * factor;
-      // שדות placeholder עתידיים (עוד לא קיימים בטבלה — יתווספו בעדכון הבא)
-      const master2015 = s.master_2015_status || 'not_checked';
-      const repName = s.representative_name || null;
-      const phone = s.phone_primary || null;
-      const email = s.email || null;
       return {
         id: s.id,
         owner_name: s.owner_name || '',
@@ -4112,10 +4123,29 @@
         family_id: s.family_group_id,
         family_name: fam ? fam.family_name : null,
         family_color: fam ? fam.color : null,
-        master2015,
-        repName,
-        phone,
-        email,
+        // שדות אימות מאסטר 2015
+        master2015: s.master_2015_status || 'not_checked',
+        master2015_folder: s.master_2015_folder || '',
+        master2015_notes: s.master_2015_notes || '',
+        // פרטי קשר
+        phone_primary: s.phone_primary || '',
+        phone_secondary: s.phone_secondary || '',
+        email: s.email || '',
+        address: s.address || '',
+        // סטטוס משפטי
+        legal_status: s.legal_status || 'normal',
+        legal_notes: s.legal_notes || '',
+        did_partnership_deal: !!s.did_partnership_deal,
+        // נציג
+        rep_name: s.representative_name || '',
+        rep_relation: s.representative_relation || '',
+        rep_phone: s.representative_phone || '',
+        rep_email: s.representative_email || '',
+        // נתוני מנדיי
+        monday_notes: s.monday_notes || '',
+        monday_customer_type: s.monday_customer_type || '',
+        monday_signed_status: s.monday_signed_status || '',
+        // הערות כלליות
         notes: s.notes || '',
         raw: s,
       };
@@ -4153,15 +4183,16 @@
 
   function updateSignedStats() {
     const total = allSignedListData.length;
+    const arbitration = allSignedListData.filter(d => d.legal_status === 'arbitration').length;
+    const masterVerified = allSignedListData.filter(d => d.master2015 === 'verified').length;
+    const noMonday = allSignedListData.filter(d => !d.monday_customer_type).length;
     const withFam = allSignedListData.filter(d => d.family_id).length;
     const noFam = total - withFam;
-    const masterVerified = allSignedListData.filter(d => d.master2015 === 'verified').length;
-    const withContact = allSignedListData.filter(d => d.phone || d.email).length;
     document.getElementById('stat-signed-total').textContent = total;
-    document.getElementById('stat-signed-with-family').textContent = withFam;
-    document.getElementById('stat-signed-no-family').textContent = noFam;
+    document.getElementById('stat-signed-arbitration').textContent = arbitration;
     document.getElementById('stat-signed-master-verified').textContent = masterVerified;
-    document.getElementById('stat-signed-with-contact').textContent = withContact;
+    document.getElementById('stat-signed-no-monday').textContent = noMonday;
+    document.getElementById('stat-signed-no-family').textContent = noFam;
   }
 
   function applySignedFilters() {
@@ -4169,11 +4200,21 @@
     const famFilter = document.getElementById('signed-family-filter').value;
     const parcelFilter = document.getElementById('signed-parcel-filter').value;
     const masterFilter = document.getElementById('signed-master-filter').value;
+    const legalFilter = document.getElementById('signed-legal-filter').value;
+    const mondayFilter = document.getElementById('signed-monday-filter').value;
     return allSignedListData.filter(d => {
       if (search && !(d.owner_name.toLowerCase().includes(search) || (d.id_number || '').includes(search))) return false;
       if (famFilter && d.family_id !== famFilter) return false;
       if (parcelFilter && String(d.parcel) !== String(parcelFilter)) return false;
       if (masterFilter && d.master2015 !== masterFilter) return false;
+      if (legalFilter && d.legal_status !== legalFilter) return false;
+      if (mondayFilter) {
+        if (mondayFilter === '__none__') {
+          if (d.monday_customer_type) return false;
+        } else {
+          if (d.monday_customer_type !== mondayFilter) return false;
+        }
+      }
       return true;
     });
   }
@@ -4182,6 +4223,17 @@
     if (status === 'verified') return '<span style="color:#16a34a;font-weight:600;">✓ אומת</span>';
     if (status === 'not_verified') return '<span style="color:#dc2626;font-weight:600;">❌ לא אומת</span>';
     return '<span style="color:#9ca3af;">❓ לא נבדק</span>';
+  }
+
+  function escHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function mondayTypeBadge(t) {
+    if (!t) return '<span style="color:#d97706;font-size:0.8rem;">⚠ ללא סיווג</span>';
+    if (t === 'מיוצג הרצוג') return '<span style="display:inline-block;padding:2px 6px;border-radius:8px;background:#fee2e2;color:#991b1b;font-size:0.78rem;">⚖ מיוצג הרצוג</span>';
+    return `<span style="display:inline-block;padding:2px 6px;border-radius:8px;background:#dcfce7;color:#166534;font-size:0.78rem;">${escHtml(t)}</span>`;
   }
 
   function renderSignedList() {
@@ -4194,65 +4246,210 @@
     const fmt = n => n ? Number(n).toLocaleString('he-IL', {maximumFractionDigits: 2}) : '—';
     let html = `
       <div style="overflow-x:auto;background:#fff;border-radius:8px;border:1px solid #e5e7eb;">
-      <table class="data-table" style="width:100%;border-collapse:collapse;font-size:0.92rem;">
+      <table class="data-table" style="width:100%;border-collapse:collapse;font-size:0.9rem;">
         <thead style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
           <tr>
             <th style="padding:10px;text-align:right;">שם</th>
             <th style="padding:10px;text-align:right;">ת.ז</th>
             <th style="padding:10px;text-align:center;">חלקה</th>
-            <th style="padding:10px;text-align:center;" title="שטח רשום בטאבו">שטח רשום</th>
             <th style="padding:10px;text-align:center;" title="שטח אחרי מקדם השמאי לחלקות חלקיות">שטח לאיחוד</th>
-            <th style="padding:10px;text-align:right;">קבוצת משפחה</th>
+            <th style="padding:10px;text-align:right;">קבוצה</th>
+            <th style="padding:10px;text-align:center;">סיווג מנדיי</th>
             <th style="padding:10px;text-align:center;" title="הצלבה מול תיקיית הסכמי 2015">מאסטר 2015</th>
-            <th style="padding:10px;text-align:right;">נציג</th>
             <th style="padding:10px;text-align:right;">טלפון</th>
             <th style="padding:10px;text-align:right;">מייל</th>
-            <th style="padding:10px;text-align:right;">הערות</th>
+            <th style="padding:10px;text-align:center;">פרטים</th>
           </tr>
         </thead>
         <tbody>
     `;
     rows.forEach(d => {
       const famBadge = d.family_name
-        ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${d.family_color || '#e5e7eb'};color:#fff;font-size:0.85rem;">${d.family_name}</span>`
+        ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${d.family_color || '#e5e7eb'};color:#fff;font-size:0.78rem;">${escHtml(d.family_name)}</span>`
         : '<span style="color:#9ca3af;">—</span>';
+      const arbBadge = d.legal_status === 'arbitration' ? ' <span title="בבוררות עם הרצוג" style="color:#dc2626;font-size:0.95rem;">⚖</span>' : '';
+      const rowBg = d.legal_status === 'arbitration' ? 'background:#fff5f5;' : '';
       html += `
-        <tr style="border-bottom:1px solid #f3f4f6;">
-          <td style="padding:8px 10px;font-weight:500;">${d.owner_name}</td>
-          <td style="padding:8px 10px;color:#6b7280;font-family:monospace;">${d.id_number || '—'}</td>
+        <tr style="border-bottom:1px solid #f3f4f6;${rowBg}cursor:pointer;" onclick="window.openSignedDetailModal('${d.id}')">
+          <td style="padding:8px 10px;font-weight:500;">${escHtml(d.owner_name)}${arbBadge}</td>
+          <td style="padding:8px 10px;color:#6b7280;font-family:monospace;font-size:0.85rem;">${d.id_number || '—'}</td>
           <td style="padding:8px 10px;text-align:center;">${d.parcel || '—'}</td>
-          <td style="padding:8px 10px;text-align:center;color:#6b7280;">${fmt(d.registered_area)}</td>
           <td style="padding:8px 10px;text-align:center;font-weight:600;">${fmt(d.effective_area)}</td>
           <td style="padding:8px 10px;">${famBadge}</td>
-          <td style="padding:8px 10px;text-align:center;">${masterStatusBadge(d.master2015)}</td>
-          <td style="padding:8px 10px;color:${d.repName ? '#1f2937' : '#9ca3af'};">${d.repName || '—'}</td>
-          <td style="padding:8px 10px;color:${d.phone ? '#1f2937' : '#9ca3af'};">${d.phone || '—'}</td>
-          <td style="padding:8px 10px;color:${d.email ? '#1f2937' : '#9ca3af'};font-size:0.85rem;">${d.email || '—'}</td>
-          <td style="padding:8px 10px;color:#6b7280;font-size:0.85rem;max-width:200px;">${d.notes ? d.notes.substring(0,80) + (d.notes.length > 80 ? '...' : '') : '—'}</td>
+          <td style="padding:8px 10px;text-align:center;">${mondayTypeBadge(d.monday_customer_type)}</td>
+          <td style="padding:8px 10px;text-align:center;font-size:0.85rem;">${masterStatusBadge(d.master2015)}</td>
+          <td style="padding:8px 10px;color:${d.phone_primary ? '#1f2937' : '#9ca3af'};font-size:0.85rem;">${escHtml(d.phone_primary) || '—'}</td>
+          <td style="padding:8px 10px;color:${d.email ? '#1f2937' : '#9ca3af'};font-size:0.82rem;">${escHtml(d.email) || '—'}</td>
+          <td style="padding:8px 10px;text-align:center;"><button class="btn-sm btn-view" onclick="event.stopPropagation();window.openSignedDetailModal('${d.id}')">👁 פרטים</button></td>
         </tr>
       `;
     });
     html += `</tbody></table></div>
-      <div style="margin-top:10px;color:#6b7280;font-size:0.85rem;">סה"כ ${rows.length} מתוך ${allSignedListData.length} חתומים</div>`;
+      <div style="margin-top:10px;color:#6b7280;font-size:0.85rem;">סה"כ ${rows.length} מתוך ${allSignedListData.length} רשומות · 💡 קליק על שורה פותח מודאל פרטים</div>`;
     container.innerHTML = html;
   }
+
+  // ============================================================
+  // מודאל פרטי בעל קרקע — תצוגה ועריכה
+  // ============================================================
+  window.openSignedDetailModal = async function(signedId) {
+    const d = allSignedListData.find(x => x.id === signedId);
+    if (!d) { alert('הרשומה לא נמצאה'); return; }
+    const overlay = document.getElementById('signed-detail-modal');
+    const content = document.getElementById('signed-detail-content');
+    const arbHeader = d.legal_status === 'arbitration'
+      ? `<div style="background:#fef2f2;color:#991b1b;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:0.9rem;">
+           ⚖ <strong>בבוררות עם הרצוג</strong> — כל פעולה מול בעל קרקע זה דורשת תיאום משפטי. עמדתנו: הסכם הניהול תקף.
+         </div>` : '';
+    content.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:2px solid #e5e7eb;padding-bottom:12px;">
+        <h2 style="margin:0;">${escHtml(d.owner_name)}</h2>
+        <button class="btn-sm" onclick="window.closeSignedDetailModal()" style="background:#f3f4f6;">✕ סגור</button>
+      </div>
+      ${arbHeader}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div style="background:#f9fafb;padding:12px;border-radius:6px;">
+          <div style="font-weight:600;color:#374151;margin-bottom:8px;">📌 פרטי בסיס</div>
+          <div style="font-size:0.9rem;line-height:1.8;">
+            <div><strong>ת.ז:</strong> ${d.id_number || '—'}</div>
+            <div><strong>חלקה:</strong> ${d.parcel || '—'}</div>
+            <div><strong>שטח רשום:</strong> ${d.registered_area ? d.registered_area.toFixed(2) + ' מ"ר' : '—'}</div>
+            <div><strong>שטח לאיחוד:</strong> ${d.effective_area ? d.effective_area.toFixed(2) + ' מ"ר' : '—'}</div>
+            <div><strong>קבוצת משפחה:</strong> ${d.family_name || '—'}</div>
+          </div>
+        </div>
+        <div style="background:#f9fafb;padding:12px;border-radius:6px;">
+          <div style="font-weight:600;color:#374151;margin-bottom:8px;">📞 פרטי קשר (עריכה)</div>
+          <div style="display:grid;gap:6px;">
+            <input id="sd-phone1" type="text" placeholder="טלפון ראשי" value="${escHtml(d.phone_primary)}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+            <input id="sd-phone2" type="text" placeholder="טלפון נוסף" value="${escHtml(d.phone_secondary)}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+            <input id="sd-email" type="email" placeholder="מייל" value="${escHtml(d.email)}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+            <input id="sd-address" type="text" placeholder="כתובת מגורים" value="${escHtml(d.address)}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+          </div>
+        </div>
+        <div style="background:#fef9c3;padding:12px;border-radius:6px;">
+          <div style="font-weight:600;color:#374151;margin-bottom:8px;">📜 אימות מאסטר 2015</div>
+          <div style="display:grid;gap:6px;">
+            <select id="sd-master-status" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+              <option value="not_checked" ${d.master2015 === 'not_checked' ? 'selected' : ''}>❓ לא נבדק</option>
+              <option value="verified" ${d.master2015 === 'verified' ? 'selected' : ''}>✓ אומת</option>
+              <option value="not_verified" ${d.master2015 === 'not_verified' ? 'selected' : ''}>❌ לא אומת</option>
+            </select>
+            <input id="sd-master-folder" type="text" placeholder="שם תיקייה במאסטר (אם נמצאה)" value="${escHtml(d.master2015_folder)}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+            <textarea id="sd-master-notes" rows="2" placeholder="הערה (למשל: 'נמצא תחת שם נישואין')" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font-family:inherit;">${escHtml(d.master2015_notes)}</textarea>
+          </div>
+        </div>
+        <div style="background:#fee2e2;padding:12px;border-radius:6px;">
+          <div style="font-weight:600;color:#374151;margin-bottom:8px;">⚖ סטטוס משפטי</div>
+          <div style="display:grid;gap:6px;">
+            <select id="sd-legal-status" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+              <option value="normal" ${d.legal_status === 'normal' ? 'selected' : ''}>רגיל</option>
+              <option value="arbitration" ${d.legal_status === 'arbitration' ? 'selected' : ''}>⚖ בבוררות הרצוג</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.9rem;">
+              <input id="sd-did-deal" type="checkbox" ${d.did_partnership_deal ? 'checked' : ''}>
+              ביצע עסקה עם השותפות (חיזוק לטענה שההסכם תקף)
+            </label>
+            <textarea id="sd-legal-notes" rows="2" placeholder="הערה משפטית" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font-family:inherit;">${escHtml(d.legal_notes)}</textarea>
+          </div>
+        </div>
+        <div style="background:#dbeafe;padding:12px;border-radius:6px;">
+          <div style="font-weight:600;color:#374151;margin-bottom:8px;">👥 נציג / מיופה כוח</div>
+          <div style="display:grid;gap:6px;">
+            <input id="sd-rep-name" type="text" placeholder="שם הנציג (למשל: אפרת לוינשטיין)" value="${escHtml(d.rep_name)}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+            <input id="sd-rep-relation" type="text" placeholder="קשר (בת/בן/עו״ד/אפוטרופוס)" value="${escHtml(d.rep_relation)}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+            <input id="sd-rep-phone" type="text" placeholder="טלפון הנציג" value="${escHtml(d.rep_phone)}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+            <input id="sd-rep-email" type="email" placeholder="מייל הנציג" value="${escHtml(d.rep_email)}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;">
+          </div>
+        </div>
+        <div style="background:#f3e8ff;padding:12px;border-radius:6px;">
+          <div style="font-weight:600;color:#374151;margin-bottom:8px;">📋 נתוני מנדיי (קריאה בלבד)</div>
+          <div style="font-size:0.85rem;line-height:1.6;">
+            <div><strong>סיווג:</strong> ${escHtml(d.monday_customer_type) || '—'}</div>
+            <div><strong>סטטוס חתימה:</strong> ${escHtml(d.monday_signed_status) || '—'}</div>
+            <details style="margin-top:6px;"><summary style="cursor:pointer;color:#7c3aed;">📄 הצג הערות מנדיי</summary>
+              <div style="background:#fff;padding:8px;border-radius:4px;margin-top:6px;max-height:200px;overflow-y:auto;white-space:pre-wrap;font-size:0.8rem;">${escHtml(d.monday_notes) || '(אין הערות)'}</div>
+            </details>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;border-top:2px solid #e5e7eb;padding-top:12px;">
+        <button class="btn-sm" onclick="window.closeSignedDetailModal()" style="background:#f3f4f6;">סגור ללא שמירה</button>
+        <button class="btn-sm btn-view" onclick="window.quickVerifyMaster('${d.id}')">✓ סמן כאומת מאסטר 2015</button>
+        <button class="btn-export" onclick="window.saveSignedDetail('${d.id}')">💾 שמור שינויים</button>
+      </div>
+    `;
+    overlay.classList.add('active');
+  };
+
+  window.closeSignedDetailModal = function() {
+    document.getElementById('signed-detail-modal').classList.remove('active');
+  };
+
+  window.saveSignedDetail = async function(signedId) {
+    const updates = {
+      phone_primary: document.getElementById('sd-phone1').value.trim() || null,
+      phone_secondary: document.getElementById('sd-phone2').value.trim() || null,
+      email: document.getElementById('sd-email').value.trim() || null,
+      address: document.getElementById('sd-address').value.trim() || null,
+      master_2015_status: document.getElementById('sd-master-status').value,
+      master_2015_folder: document.getElementById('sd-master-folder').value.trim() || null,
+      master_2015_notes: document.getElementById('sd-master-notes').value.trim() || null,
+      legal_status: document.getElementById('sd-legal-status').value,
+      did_partnership_deal: document.getElementById('sd-did-deal').checked,
+      legal_notes: document.getElementById('sd-legal-notes').value.trim() || null,
+      representative_name: document.getElementById('sd-rep-name').value.trim() || null,
+      representative_relation: document.getElementById('sd-rep-relation').value.trim() || null,
+      representative_phone: document.getElementById('sd-rep-phone').value.trim() || null,
+      representative_email: document.getElementById('sd-rep-email').value.trim() || null,
+    };
+    const { error } = await supabase.from('signed_owners').update(updates).eq('id', signedId);
+    if (error) { alert('שגיאה בשמירה: ' + error.message); return; }
+    window.closeSignedDetailModal();
+    await loadSignedList();
+  };
+
+  window.quickVerifyMaster = async function(signedId) {
+    const folder = document.getElementById('sd-master-folder').value.trim();
+    const notes = document.getElementById('sd-master-notes').value.trim();
+    const { error } = await supabase.from('signed_owners').update({
+      master_2015_status: 'verified',
+      master_2015_folder: folder || null,
+      master_2015_notes: notes || null,
+    }).eq('id', signedId);
+    if (error) { alert('שגיאה: ' + error.message); return; }
+    window.closeSignedDetailModal();
+    await loadSignedList();
+  };
 
   function exportSignedListCSV() {
     const rows = applySignedFilters();
     if (rows.length === 0) { alert('אין מה לייצא'); return; }
-    const header = ['שם','ת.ז','חלקה','שטח רשום','שטח לאיחוד','קבוצת משפחה','מאסטר 2015','נציג','טלפון','מייל','הערות'];
+    const header = ['שם','ת.ז','חלקה','שטח רשום','שטח לאיחוד','קבוצת משפחה','סיווג מנדיי','סטטוס משפטי','מאסטר 2015','תיקיית מאסטר','נציג','קשר נציג','טלפון נציג','מייל נציג','טלפון','טלפון נוסף','מייל','כתובת','הערות מנדיי','הערות'];
     const csvRows = [header.join(',')];
     rows.forEach(d => {
       const fields = [
         d.owner_name, d.id_number, d.parcel,
         d.registered_area || '', d.effective_area ? d.effective_area.toFixed(2) : '',
-        d.family_name || '', d.master2015,
-        d.repName || '', d.phone || '', d.email || '',
-        (d.notes || '').replace(/[\r\n]+/g, ' ').replace(/"/g, '""'),
+        d.family_name || '',
+        d.monday_customer_type || '',
+        d.legal_status === 'arbitration' ? 'בבוררות' : 'רגיל',
+        d.master2015,
+        d.master2015_folder || '',
+        d.rep_name || '',
+        d.rep_relation || '',
+        d.rep_phone || '',
+        d.rep_email || '',
+        d.phone_primary || '',
+        d.phone_secondary || '',
+        d.email || '',
+        d.address || '',
+        (d.monday_notes || '').replace(/[\r\n]+/g, ' ').slice(0, 300),
+        (d.notes || '').replace(/[\r\n]+/g, ' '),
       ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`);
       csvRows.push(fields.join(','));
     });
-    const csv = '﻿' + csvRows.join('\n'); // BOM ל-Excel
+    const csv = '﻿' + csvRows.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -4266,8 +4463,14 @@
   document.getElementById('signed-family-filter').addEventListener('change', () => renderSignedList());
   document.getElementById('signed-parcel-filter').addEventListener('change', () => renderSignedList());
   document.getElementById('signed-master-filter').addEventListener('change', () => renderSignedList());
+  document.getElementById('signed-legal-filter').addEventListener('change', () => renderSignedList());
+  document.getElementById('signed-monday-filter').addEventListener('change', () => renderSignedList());
   document.getElementById('signed-refresh-btn').addEventListener('click', loadSignedList);
   document.getElementById('signed-export-btn').addEventListener('click', exportSignedListCSV);
+  // סגירת מודאל בלחיצה על הרקע
+  document.getElementById('signed-detail-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'signed-detail-modal') window.closeSignedDetailModal();
+  });
 
   // טעינה ראשונית
   await loadData();
