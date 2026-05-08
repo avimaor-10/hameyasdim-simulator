@@ -4099,20 +4099,29 @@
     partnership_units_area: 0,
   };
 
-  // family_group_id של רוכשי יחידות שותפות — מסתירים מהרשימה הראשית
+  // קיבוץ לפי id_number — מציגים שורה אחת לכל אדם, גם אם יש לו כמה חלקות
+  // הסינון של רוכשי שותפות:
+  //   1. ownership_category='partnership_buyer' (ארד, שירה, וזוב)
+  //   2. חברי קבוצות רוכשי יחידות קרקע של השותפות (~18 רוכשי דודי יצחקי בחלקה 19)
+  // ⚠ אלה אינם לקוחות מקור — נכנסו דרך עסקת השותפות, לא חתמו על הסכם ניהול 2015.
   const HIDDEN_PARTNERSHIP_GROUP_IDS = new Set([
-    'a990ed96-5b11-4d1a-9db1-89c76833af8b', // רוכשי קבוצת דודי יצחקי (21 חברים)
+    'a990ed96-5b11-4d1a-9db1-89c76833af8b', // רוכשי קבוצת דודי יצחקי
     '50ee16ff-4025-479d-af57-9f56d0489305', // רוכשי שותפות נדלן נדלן קבוצת מור
   ]);
+  const isPartnershipBuyer = (s) =>
+    s.ownership_category === 'partnership_buyer' ||
+    HIDDEN_PARTNERSHIP_GROUP_IDS.has(s.family_group_id);
 
   async function loadSignedList() {
     const container = document.getElementById('signed-list-container');
     container.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner"></div><div style="margin-top:8px;color:#9ca3af;">טוען רשימת חתומים...</div></div>`;
 
-    const [signedRes, famRes, parcelsMetaRes] = await Promise.all([
+    const [signedRes, famRes, parcelsMetaRes, dealsRes, dealReplacedRes] = await Promise.all([
       supabase.from('signed_owners').select('*').eq('is_active', true).order('owner_name'),
       supabase.from('family_groups').select('*').eq('is_active', true).order('family_name'),
       supabase.from('parcels_meta').select('*').order('parcel'),
+      supabase.from('partnership_deals').select('*').eq('is_active', true).order('deal_number'),
+      supabase.from('deal_replaced_owners').select('*'),
     ]);
 
     if (signedRes.error) {
@@ -4130,12 +4139,30 @@
 
     allSignedListFamilies = families;
 
-    // סינון: מסתיר חברי קבוצות רוכשי יחידות שותפות (דודי יצחקי, נדלן נדלן)
-    // הם נשארים במסד אבל לא מציגים אותם פירוט-פירוט במסך הראשי
-    const hiddenRecords = signed.filter(s => HIDDEN_PARTNERSHIP_GROUP_IDS.has(s.family_group_id));
-    const visibleRecords = signed.filter(s => !HIDDEN_PARTNERSHIP_GROUP_IDS.has(s.family_group_id));
+    // אכלוס משתנים גלובליים — חיוני ל-getOwnerEffectiveArea() שמקזז עסקאות מקור
+    // (במידה ולא נטענו עדיין מ-loadAllocations, נמלא אותם כעת)
+    allDealReplacedOwners = dealReplacedRes.data || [];
+    dealReplacementsByDealId = new Map();
+    dealReplacementsByOwnerId = new Map();
+    allDealReplacedOwners.forEach(r => {
+      if (!dealReplacementsByDealId.has(r.deal_id)) dealReplacementsByDealId.set(r.deal_id, []);
+      dealReplacementsByDealId.get(r.deal_id).push(r.signed_owner_id);
+      if (!dealReplacementsByOwnerId.has(r.signed_owner_id)) dealReplacementsByOwnerId.set(r.signed_owner_id, []);
+      dealReplacementsByOwnerId.get(r.signed_owner_id).push(r.deal_id);
+    });
+    allDeals = dealsRes.data || [];
+    allSignedOwners = signed; // (חופף — אבל זה הסטנדרט במערכת)
+    // אכלוס parcels_meta הגלובליים (לגיבוי, אם getParcelMeta תלוי בהם)
+    allParcelsMeta = parcelsMeta;
+    parcelsMetaByParcel = parcelsMetaIdx;
 
-    // חישוב הסטטיסטיקה האגרגטיבית של היחידות המוסתרות
+    // סינון רוכשי שותפות (לא לקוחות מקור) — לפי 2 קריטריונים מצרפיים:
+    //   1. ownership_category='partnership_buyer' (3 רשומות: ארד, שירה, וזוב)
+    //   2. חברי קבוצות "רוכשי יחידות קרקע" (~18 רוכשי דודי יצחקי בחלקה 19)
+    const hiddenRecords  = signed.filter(s =>  isPartnershipBuyer(s));
+    const visibleRecords = signed.filter(s => !isPartnershipBuyer(s));
+
+    // סטטיסטיקה אגרגטיבית של רוכשי השותפות (לכרטיסיה נפרדת)
     const hiddenIds = new Set(hiddenRecords.map(r => r.id_number).filter(Boolean));
     let hiddenArea = 0;
     hiddenRecords.forEach(s => {
@@ -4150,51 +4177,109 @@
       partnership_units_records: hiddenRecords.length,
     };
 
-    allSignedListData = visibleRecords.map(s => {
-      const fam = s.family_group_id ? familyById[s.family_group_id] : null;
+    // קיבוץ visibleRecords לפי id_number — שורה אחת לכל אדם
+    const groupedById = {};
+    visibleRecords.forEach(s => {
+      const key = s.id_number || `__no_id__${s.id}`;
+      if (!groupedById[key]) {
+        const fam = s.family_group_id ? familyById[s.family_group_id] : null;
+        groupedById[key] = {
+          // מזהים — נשמור id של הרשומה הראשונה לתאימות אחורה (modal etc)
+          id: s.id,
+          all_record_ids: [],
+          parcel_records: [], // [{id, parcel, registered, effective, factor}]
+
+          // שדות זהותיים (מהרשומה הראשונה — אמורים להיות זהים בכל הרשומות)
+          owner_name: s.owner_name || '',
+          id_number: s.id_number || '',
+
+          // קבוצה (מהרשומה הראשונה; נטפל בקצוות מאוחר אם צריך)
+          family_id: s.family_group_id,
+          family_name: fam ? fam.family_name : null,
+          family_color: fam ? fam.color : null,
+
+          // קטגוריות וסטטוסים (מהרשומה הראשונה — קנוני לאדם)
+          ownership_category: s.ownership_category || 'signed_with_us',
+          legal_status: s.legal_status || 'normal',
+          did_partnership_deal: !!s.did_partnership_deal,
+          legal_notes: s.legal_notes || '',
+
+          // אימות מאסטר 2015
+          master2015: s.master_2015_status || 'not_checked',
+          master2015_folder: s.master_2015_folder || '',
+          master2015_notes: s.master_2015_notes || '',
+
+          // פרטי קשר
+          phone_primary: s.phone_primary || '',
+          phone_secondary: s.phone_secondary || '',
+          email: s.email || '',
+          address: s.address || '',
+
+          // נציג
+          rep_name: s.representative_name || '',
+          rep_relation: s.representative_relation || '',
+          rep_phone: s.representative_phone || '',
+          rep_email: s.representative_email || '',
+
+          // נתוני מנדיי
+          monday_notes: s.monday_notes || '',
+          monday_customer_type: s.monday_customer_type || '',
+          monday_signed_status: s.monday_signed_status || '',
+          notes: s.notes || '',
+
+          // אגרגציות (יחושבו תוך כדי)
+          registered_area: 0,
+          effective_area: 0,
+          parcels_set: new Set(),
+
+          raw: s, // לתאימות
+        };
+      }
+      const g = groupedById[key];
       const parcelMeta = parcelsMetaIdx[s.parcel];
       const factor = parcelMeta?.participation_factor != null ? parseFloat(parcelMeta.participation_factor) : 1;
       const stored = parseFloat(s.agreement_area) || parseFloat(s.unification_area) || 0;
-      const effectiveArea = stored * factor;
-      return {
+      // קיזוז עסקאות מקור — אם הבעלים מכר חלק לשותפות, הוא לא מחזיק יותר את כל הרשום
+      const deduction = getOwnerRegisteredDeduction(s);
+      const netRegistered = Math.max(0, stored - deduction);
+      const effectiveArea = netRegistered * factor;
+      const offsettingDealNums = getOffsettingDealNumbers(s);
+
+      g.all_record_ids.push(s.id);
+      g.parcel_records.push({
         id: s.id,
-        owner_name: s.owner_name || '',
-        id_number: s.id_number || '',
-        parcel: s.parcel || '',
-        registered_area: stored,
-        effective_area: effectiveArea,
-        family_id: s.family_group_id,
-        family_name: fam ? fam.family_name : null,
-        family_color: fam ? fam.color : null,
-        // קטגוריית בעלות
-        ownership_category: s.ownership_category || 'signed_with_us',
-        // שדות אימות מאסטר 2015
-        master2015: s.master_2015_status || 'not_checked',
-        master2015_folder: s.master_2015_folder || '',
-        master2015_notes: s.master_2015_notes || '',
-        // פרטי קשר
-        phone_primary: s.phone_primary || '',
-        phone_secondary: s.phone_secondary || '',
-        email: s.email || '',
-        address: s.address || '',
-        // סטטוס משפטי
-        legal_status: s.legal_status || 'normal',
-        legal_notes: s.legal_notes || '',
-        did_partnership_deal: !!s.did_partnership_deal,
-        // נציג
-        rep_name: s.representative_name || '',
-        rep_relation: s.representative_relation || '',
-        rep_phone: s.representative_phone || '',
-        rep_email: s.representative_email || '',
-        // נתוני מנדיי
-        monday_notes: s.monday_notes || '',
-        monday_customer_type: s.monday_customer_type || '',
-        monday_signed_status: s.monday_signed_status || '',
-        // הערות כלליות
-        notes: s.notes || '',
-        raw: s,
+        parcel: s.parcel,
+        registered: stored,
+        deducted_by_deal: deduction,
+        net_registered: netRegistered,
+        factor: factor,
+        effective: effectiveArea,
+        offsetting_deal_numbers: offsettingDealNums,
+      });
+      g.registered_area += stored;
+      g.deducted_total = (g.deducted_total || 0) + deduction;
+      g.net_registered_area = (g.net_registered_area || 0) + netRegistered;
+      g.effective_area += effectiveArea;
+      if (s.parcel) g.parcels_set.add(s.parcel);
+    });
+
+    // המרה למערך + סידור פנימי של חלקות
+    allSignedListData = Object.values(groupedById).map(g => {
+      const parcels_array = Array.from(g.parcels_set).sort((a, b) => Number(a) - Number(b));
+      g.parcel_records.sort((a, b) => Number(a.parcel) - Number(b.parcel));
+      return {
+        ...g,
+        parcels_array,
+        parcel_count: parcels_array.length,
+        // השדה "parcel" הישן — מוצג רק אם יש חלקה אחת. אחרת זה מערך.
+        parcel: parcels_array.length === 1 ? parcels_array[0] : null,
+        // הסר את ה-Set מהאובייקט הסופי (לא JSON-friendly)
+        parcels_set: undefined,
       };
     });
+
+    // מיון ברירת מחדל: בעלי קרקע מהגדול לקטן (לפי שטח לאיחוד)
+    allSignedListData.sort((a, b) => (b.effective_area || 0) - (a.effective_area || 0));
 
     // אכלוס מסננים (פעם אחת)
     populateSignedFilters(families, parcelsMeta);
@@ -4217,7 +4302,10 @@
       });
     }
     if (parcelSel.options.length <= 1) {
-      const usedParcels = [...new Set(allSignedListData.map(d => d.parcel))].filter(Boolean).sort((a,b) => a-b);
+      // אסוף את כל החלקות מכל הרשומות (כי לאדם אחד יכולות להיות כמה חלקות)
+      const usedParcels = [...new Set(
+        allSignedListData.flatMap(d => d.parcels_array || [])
+      )].filter(Boolean).sort((a,b) => Number(a) - Number(b));
       usedParcels.forEach(p => {
         const o = document.createElement('option');
         o.value = p; o.textContent = `חלקה ${p}`;
@@ -4256,7 +4344,11 @@
     return allSignedListData.filter(d => {
       if (search && !(d.owner_name.toLowerCase().includes(search) || (d.id_number || '').includes(search))) return false;
       if (famFilter && d.family_id !== famFilter) return false;
-      if (parcelFilter && String(d.parcel) !== String(parcelFilter)) return false;
+      // סינון חלקה — תואם אם אחת מהחלקות של האדם תואמת
+      if (parcelFilter) {
+        const inParcels = (d.parcels_array || []).some(p => String(p) === String(parcelFilter));
+        if (!inParcels) return false;
+      }
       if (masterFilter && d.master2015 !== masterFilter) return false;
       if (categoryFilter && d.ownership_category !== categoryFilter) return false;
       if (legalFilter && d.legal_status !== legalFilter) return false;
@@ -4315,8 +4407,8 @@
           <tr>
             <th style="padding:10px;text-align:right;">שם</th>
             <th style="padding:10px;text-align:right;">ת.ז</th>
-            <th style="padding:10px;text-align:center;">חלקה</th>
-            <th style="padding:10px;text-align:center;" title="שטח אחרי מקדם השמאי לחלקות חלקיות">שטח לאיחוד</th>
+            <th style="padding:10px;text-align:center;" title="כל החלקות בבעלות האדם הזה">חלקות</th>
+            <th style="padding:10px;text-align:center;" title="סכום שטח אחרי מקדם השמאי לכל החלקות">שטח לאיחוד</th>
             <th style="padding:10px;text-align:right;">קבוצה</th>
             <th style="padding:10px;text-align:center;" title="קטגוריית בעלות במערכת">קטגוריה</th>
             <th style="padding:10px;text-align:center;">סיווג מנדיי</th>
@@ -4334,11 +4426,23 @@
         : '<span style="color:#9ca3af;">—</span>';
       const arbBadge = d.legal_status === 'arbitration' ? ' <span title="בבוררות עם הרצוג" style="color:#dc2626;font-size:0.95rem;">⚖</span>' : '';
       const rowBg = d.legal_status === 'arbitration' ? 'background:#fff5f5;' : '';
+      // תצוגת חלקות — אם אחת: מספר. אם 2-3: מופרד בפסיקים. אם 4+: "X חלקות" + tooltip עם רשימה.
+      const parcels = d.parcels_array || [];
+      let parcelsCell;
+      if (parcels.length === 0) {
+        parcelsCell = '—';
+      } else if (parcels.length === 1) {
+        parcelsCell = `<span style="font-weight:500;">${parcels[0]}</span>`;
+      } else if (parcels.length <= 3) {
+        parcelsCell = `<span title="${parcels.length} חלקות">${parcels.join(', ')}</span>`;
+      } else {
+        parcelsCell = `<span title="${parcels.join(', ')}" style="display:inline-block;padding:2px 8px;border-radius:10px;background:#e0e7ff;color:#3730a3;font-weight:600;font-size:0.82rem;">${parcels.length} חלקות 📁</span>`;
+      }
       html += `
         <tr style="border-bottom:1px solid #f3f4f6;${rowBg}cursor:pointer;" onclick="window.openSignedDetailModal('${d.id}')">
           <td style="padding:8px 10px;font-weight:500;">${escHtml(d.owner_name)}${arbBadge}</td>
           <td style="padding:8px 10px;color:#6b7280;font-family:monospace;font-size:0.85rem;">${d.id_number || '—'}</td>
-          <td style="padding:8px 10px;text-align:center;">${d.parcel || '—'}</td>
+          <td style="padding:8px 10px;text-align:center;">${parcelsCell}</td>
           <td style="padding:8px 10px;text-align:center;font-weight:600;">${fmt(d.effective_area)}</td>
           <td style="padding:8px 10px;">${famBadge}</td>
           <td style="padding:8px 10px;text-align:center;">${categoryBadge(d.ownership_category)}</td>
@@ -4351,7 +4455,7 @@
       `;
     });
     html += `</tbody></table></div>
-      <div style="margin-top:10px;color:#6b7280;font-size:0.85rem;">סה"כ ${rows.length} מתוך ${allSignedListData.length} רשומות · 💡 קליק על שורה פותח מודאל פרטים</div>`;
+      <div style="margin-top:10px;color:#6b7280;font-size:0.85rem;">סה"כ ${rows.length} בעלי קרקע מתוך ${allSignedListData.length} · 💡 קליק על שורה פותח מודאל עם פירוט החלקות</div>`;
     container.innerHTML = html;
   }
 
@@ -4367,21 +4471,75 @@
       ? `<div style="background:#fef2f2;color:#991b1b;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:0.9rem;">
            ⚖ <strong>בבוררות עם הרצוג</strong> — כל פעולה מול בעל קרקע זה דורשת תיאום משפטי. עמדתנו: הסכם הניהול תקף.
          </div>` : '';
+    // טבלת פירוט החלקות (אם יש לאדם יותר מחלקה אחת או רשומה אחת)
+    const fmt2 = n => n != null ? Number(n).toLocaleString('he-IL', {maximumFractionDigits: 2}) : '—';
+    const parcelRows = (d.parcel_records || []);
+    const hasAnyDeduction = parcelRows.some(pr => pr.deducted_by_deal > 0.01);
+    const parcelsTableHtml = parcelRows.length === 0 ? '<div style="color:#9ca3af;">אין רשומות חלקה</div>' : `
+      <table style="width:100%;border-collapse:collapse;font-size:0.85rem;background:#fff;border-radius:4px;overflow:hidden;">
+        <thead style="background:#f3f4f6;">
+          <tr>
+            <th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;">חלקה</th>
+            <th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;" title="שטח רשום בטאבו">שטח רשום</th>
+            ${hasAnyDeduction ? `<th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;color:#dc2626;" title="כמה הומר לעסקת מקור (מכר חלק לשותפות)">מכר לעסקה</th>` : ''}
+            ${hasAnyDeduction ? `<th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;" title="שטח רשום נטו אחרי קיזוז העסקה">נטו רשום</th>` : ''}
+            <th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;" title="מקדם השתתפות של השמאי לחלקה זו">מקדם</th>
+            <th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;" title="שטח אפקטיבי = שטח רשום נטו × מקדם">שטח לאיחוד</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${parcelRows.map(pr => {
+            const dealsTag = pr.offsetting_deal_numbers && pr.offsetting_deal_numbers.length > 0
+              ? `<span style="color:#9333ea;font-size:0.72rem;display:block;">🔗 עסקה #${pr.offsetting_deal_numbers.join(', #')}</span>` : '';
+            return `
+              <tr>
+                <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #f3f4f6;font-weight:600;">${pr.parcel}${dealsTag}</td>
+                <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #f3f4f6;">${fmt2(pr.registered)}</td>
+                ${hasAnyDeduction ? `<td style="padding:6px 10px;text-align:center;border-bottom:1px solid #f3f4f6;color:#dc2626;">${pr.deducted_by_deal > 0.01 ? '−' + fmt2(pr.deducted_by_deal) : '—'}</td>` : ''}
+                ${hasAnyDeduction ? `<td style="padding:6px 10px;text-align:center;border-bottom:1px solid #f3f4f6;font-weight:500;">${fmt2(pr.net_registered)}</td>` : ''}
+                <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #f3f4f6;color:${pr.factor < 1 ? '#dc2626' : '#16a34a'};">${(pr.factor * 100).toFixed(1)}%</td>
+                <td style="padding:6px 10px;text-align:center;border-bottom:1px solid #f3f4f6;font-weight:600;">${fmt2(pr.effective)}</td>
+              </tr>
+            `;
+          }).join('')}
+          <tr style="background:#fef9c3;font-weight:700;">
+            <td style="padding:6px 10px;text-align:center;">סה"כ</td>
+            <td style="padding:6px 10px;text-align:center;">${fmt2(d.registered_area)}</td>
+            ${hasAnyDeduction ? `<td style="padding:6px 10px;text-align:center;color:#dc2626;">${(d.deducted_total || 0) > 0.01 ? '−' + fmt2(d.deducted_total) : '—'}</td>` : ''}
+            ${hasAnyDeduction ? `<td style="padding:6px 10px;text-align:center;">${fmt2(d.net_registered_area)}</td>` : ''}
+            <td style="padding:6px 10px;text-align:center;color:#6b7280;">—</td>
+            <td style="padding:6px 10px;text-align:center;">${fmt2(d.effective_area)}</td>
+          </tr>
+        </tbody>
+      </table>
+      ${hasAnyDeduction ? `<div style="margin-top:8px;padding:6px 10px;background:#f3e8ff;border-radius:4px;font-size:0.8rem;color:#6b21a8;">🔗 בעל הקרקע מכר חלק מקרקעיו בעסקת מקור עם השותפות. השטח לאיחוד מציג נטו אחרי הקיזוז.</div>` : ''}
+    `;
+
     content.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:2px solid #e5e7eb;padding-bottom:12px;">
         <h2 style="margin:0;">${escHtml(d.owner_name)}</h2>
         <button class="btn-sm" onclick="window.closeSignedDetailModal()" style="background:#f3f4f6;">✕ סגור</button>
       </div>
       ${arbHeader}
+
+      <!-- פירוט חלקות בבעלות — סקציה ראשית, רוחב מלא -->
+      <div style="background:#eef2ff;padding:12px;border-radius:6px;margin-bottom:16px;border:1px solid #c7d2fe;">
+        <div style="font-weight:600;color:#374151;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+          <span>🗺 חלקות בבעלות (${d.parcel_count || 0})</span>
+          <span style="font-size:0.82rem;color:#6b7280;font-weight:400;">סך הכל: ${fmt2(d.effective_area)} מ"ר באיחוד וחלוקה</span>
+        </div>
+        ${parcelsTableHtml}
+      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
         <div style="background:#f9fafb;padding:12px;border-radius:6px;">
           <div style="font-weight:600;color:#374151;margin-bottom:8px;">📌 פרטי בסיס</div>
           <div style="font-size:0.9rem;line-height:1.8;">
             <div><strong>ת.ז:</strong> ${d.id_number || '—'}</div>
-            <div><strong>חלקה:</strong> ${d.parcel || '—'}</div>
-            <div><strong>שטח רשום:</strong> ${d.registered_area ? d.registered_area.toFixed(2) + ' מ"ר' : '—'}</div>
-            <div><strong>שטח לאיחוד:</strong> ${d.effective_area ? d.effective_area.toFixed(2) + ' מ"ר' : '—'}</div>
             <div><strong>קבוצת משפחה:</strong> ${d.family_name || '—'}</div>
+            <div><strong>שטח רשום מצרפי:</strong> ${d.registered_area ? d.registered_area.toFixed(2) + ' מ"ר' : '—'}</div>
+            <div><strong>שטח לאיחוד מצרפי:</strong> ${d.effective_area ? d.effective_area.toFixed(2) + ' מ"ר' : '—'}</div>
+            <div><strong>מספר חלקות:</strong> ${d.parcel_count || 0}</div>
           </div>
         </div>
         <div style="background:#f9fafb;padding:12px;border-radius:6px;">
@@ -4460,6 +4618,11 @@
   };
 
   window.saveSignedDetail = async function(signedId) {
+    // מצא את הקבוצה (כל הרשומות של אותו אדם — לפי id_number)
+    const group = allSignedListData.find(x => x.id === signedId);
+    if (!group) { alert('הרשומה לא נמצאה'); return; }
+    const recordIds = group.all_record_ids && group.all_record_ids.length ? group.all_record_ids : [signedId];
+
     const updates = {
       phone_primary: document.getElementById('sd-phone1').value.trim() || null,
       phone_secondary: document.getElementById('sd-phone2').value.trim() || null,
@@ -4477,20 +4640,24 @@
       representative_phone: document.getElementById('sd-rep-phone').value.trim() || null,
       representative_email: document.getElementById('sd-rep-email').value.trim() || null,
     };
-    const { error } = await supabase.from('signed_owners').update(updates).eq('id', signedId);
+    // עדכון על כל הרשומות של אותו אדם (לתמיכה במספר חלקות)
+    const { error } = await supabase.from('signed_owners').update(updates).in('id', recordIds);
     if (error) { alert('שגיאה בשמירה: ' + error.message); return; }
     window.closeSignedDetailModal();
     await loadSignedList();
   };
 
   window.quickVerifyMaster = async function(signedId) {
+    const group = allSignedListData.find(x => x.id === signedId);
+    if (!group) { alert('הרשומה לא נמצאה'); return; }
+    const recordIds = group.all_record_ids && group.all_record_ids.length ? group.all_record_ids : [signedId];
     const folder = document.getElementById('sd-master-folder').value.trim();
     const notes = document.getElementById('sd-master-notes').value.trim();
     const { error } = await supabase.from('signed_owners').update({
       master_2015_status: 'verified',
       master_2015_folder: folder || null,
       master_2015_notes: notes || null,
-    }).eq('id', signedId);
+    }).in('id', recordIds);
     if (error) { alert('שגיאה: ' + error.message); return; }
     window.closeSignedDetailModal();
     await loadSignedList();
@@ -4499,11 +4666,12 @@
   function exportSignedListCSV() {
     const rows = applySignedFilters();
     if (rows.length === 0) { alert('אין מה לייצא'); return; }
-    const header = ['שם','ת.ז','חלקה','שטח רשום','שטח לאיחוד','קבוצת משפחה','סיווג מנדיי','סטטוס משפטי','מאסטר 2015','תיקיית מאסטר','נציג','קשר נציג','טלפון נציג','מייל נציג','טלפון','טלפון נוסף','מייל','כתובת','הערות מנדיי','הערות'];
+    const header = ['שם','ת.ז','חלקות','מספר חלקות','שטח רשום','שטח לאיחוד','קבוצת משפחה','סיווג מנדיי','סטטוס משפטי','מאסטר 2015','תיקיית מאסטר','נציג','קשר נציג','טלפון נציג','מייל נציג','טלפון','טלפון נוסף','מייל','כתובת','הערות מנדיי','הערות'];
     const csvRows = [header.join(',')];
     rows.forEach(d => {
+      const parcelsList = (d.parcels_array || []).join(', ');
       const fields = [
-        d.owner_name, d.id_number, d.parcel,
+        d.owner_name, d.id_number, parcelsList, d.parcel_count || 0,
         d.registered_area || '', d.effective_area ? d.effective_area.toFixed(2) : '',
         d.family_name || '',
         d.monday_customer_type || '',
