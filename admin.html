@@ -1104,6 +1104,7 @@
     </select>
     <button id="signed-refresh-btn" class="btn-sm btn-view">🔄 רענן</button>
     <button id="signed-export-btn" class="btn-export">📥 ייצוא CSV</button>
+    <button id="signed-group-toggle-btn" class="btn-sm" style="background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;font-weight:600;" title="קבוצות עם 15 חברים או יותר מוצגות ככרטיס מאוחד שאפשר להיכנס פנימה">📋 תצוגה רגילה</button>
   </div>
 
   <div id="signed-list-container">
@@ -1123,6 +1124,11 @@
 <!-- מודאל ניהול קבוצת משפחה -->
 <div class="modal-overlay" id="family-modal">
   <div class="modal" id="family-modal-content"></div>
+</div>
+
+<!-- מודאל פירוט חברי קבוצה (תצוגה קבוצתית) -->
+<div class="modal-overlay" id="family-detail-modal">
+  <div class="modal" id="family-detail-content" style="max-width:1200px;"></div>
 </div>
 
 <!-- מודאל פרטי משתמש -->
@@ -4094,6 +4100,10 @@
   // ============================================================
   let allSignedListData = []; // נתונים מאוחדים לתצוגה (אחרי סינון יחידות שותפות)
   let allSignedListFamilies = []; // קבוצות משפחה (להצגה בעמודה ובמסנן)
+  // תצוגה קבוצתית — קבוצות עם 15+ חברים מתכווצות לכרטיס אחד
+  const GROUP_VIEW_THRESHOLD = 15;
+  // מצב נשמר ב-localStorage; ברירת מחדל = true (תצוגה קבוצתית — נראה את הקבוצות הגדולות כשורה אחת)
+  let signedGroupViewMode = (localStorage.getItem('signedGroupViewMode') !== 'false');
   let signedListAggregateStats = {  // סטטיסטיקה אגרגטיבית של רוכשי יחידות
     partnership_units_count: 0,
     partnership_units_area: 0,
@@ -4157,8 +4167,10 @@
     parcelsMetaByParcel = parcelsMetaIdx;
 
     // סינון רוכשי שותפות (לא לקוחות מקור) — לפי 2 קריטריונים מצרפיים:
-    //   1. ownership_category='partnership_buyer' (3 רשומות: ארד, שירה, וזוב)
-    //   2. חברי קבוצות "רוכשי יחידות קרקע" (~18 רוכשי דודי יצחקי בחלקה 19)
+    //   1. ownership_category='partnership_buyer' (3 רשומות: ארד, שירה, וזוב — סוכם בזיכרון)
+    //   2. חברי קבוצות "רוכשי יחידות קרקע" (~18 רוכשי דודי יצחקי בחלקה 19 + רוכשי נדלן נדלן)
+    // ⚠ בתצוגה הקבוצתית, רוכשי שותפות מוצגים בסקציה נפרדת עם תיוג כחול.
+    //   במצב רגיל (שטוח) — מסוננים החוצה (כפי שהיה תמיד).
     const hiddenRecords  = signed.filter(s =>  isPartnershipBuyer(s));
     const visibleRecords = signed.filter(s => !isPartnershipBuyer(s));
 
@@ -4177,13 +4189,16 @@
       partnership_units_records: hiddenRecords.length,
     };
 
-    // קיבוץ visibleRecords לפי id_number — שורה אחת לכל אדם
+    // קיבוץ כל הרשומות (visible + hidden) לפי id_number — שורה אחת לכל אדם
+    // hiddenRecords מקבלים דגל is_partnership=true כדי שהפילטרים יוכלו לסנן בהתאם
     const groupedById = {};
-    visibleRecords.forEach(s => {
+    [...visibleRecords, ...hiddenRecords].forEach(s => {
       const key = s.id_number || `__no_id__${s.id}`;
       if (!groupedById[key]) {
         const fam = s.family_group_id ? familyById[s.family_group_id] : null;
         groupedById[key] = {
+          // דגל — האם זה רוכש שותפות (ארד/שירה/וזוב/וכל חברי הקבוצות המוסתרות)
+          is_partnership: isPartnershipBuyer(s),
           // מזהים — נשמור id של הרשומה הראשונה לתאימות אחורה (modal etc)
           id: s.id,
           all_record_ids: [],
@@ -4342,6 +4357,9 @@
     const mondayFilter = document.getElementById('signed-monday-filter').value;
     const categoryFilter = document.getElementById('signed-category-filter').value;
     return allSignedListData.filter(d => {
+      // רוכשי שותפות (ארד/שירה/וזוב/וקבוצותיהם) מוצגים רק במצב קבוצתי בסקציה נפרדת.
+      // במצב רגיל (שטוח) — הם מוסתרים כמו שהיה תמיד.
+      if (!signedGroupViewMode && d.is_partnership) return false;
       if (search && !(d.owner_name.toLowerCase().includes(search) || (d.id_number || '').includes(search))) return false;
       if (famFilter && d.family_id !== famFilter) return false;
       // סינון חלקה — תואם אם אחת מהחלקות של האדם תואמת
@@ -4392,13 +4410,176 @@
     return `<span style="display:inline-block;padding:2px 6px;border-radius:8px;background:${m.bg};color:${m.fg};font-size:0.78rem;white-space:nowrap;" title="${m.label}">${m.icon} ${m.label}</span>`;
   }
 
+  // עדכון תווית כפתור התצוגה הקבוצתית
+  function updateGroupToggleLabel() {
+    const btn = document.getElementById('signed-group-toggle-btn');
+    if (!btn) return;
+    if (signedGroupViewMode) {
+      btn.textContent = '📂 תצוגה קבוצתית';
+      btn.style.background = '#3730a3';
+      btn.style.color = '#ffffff';
+      btn.style.borderColor = '#3730a3';
+    } else {
+      btn.textContent = '📋 תצוגה רגילה';
+      btn.style.background = '#eef2ff';
+      btn.style.color = '#3730a3';
+      btn.style.borderColor = '#c7d2fe';
+    }
+  }
+
+  // קיבוץ rows לפי family_id; קבוצות עם > GROUP_VIEW_THRESHOLD חברים תוחזרנה ככרטיס מסוכם
+  // מחזיר 3 קבוצות:
+  //   mainGroups       — קבוצות בעלי קרקע ראשיות (עוצמה, מועלם וכו')
+  //   partnershipGroups — קבוצות רוכשי שותפות (דודי יצחקי, נדלן נדלן + בודדים partnership_buyer)
+  //   ungrouped        — בעלים בודדים שלא בקבוצה גדולה
+  function groupRowsByFamily(rows) {
+    const byFamily = new Map();
+    const ungrouped = [];
+    const partnershipSingles = []; // רוכשי שותפות בלי family_id (ארד, שירה, וזוב כיחידים)
+    rows.forEach(r => {
+      if (!r.family_id) {
+        if (r.is_partnership) partnershipSingles.push(r);
+        else ungrouped.push(r);
+        return;
+      }
+      if (!byFamily.has(r.family_id)) {
+        byFamily.set(r.family_id, {
+          family_id: r.family_id,
+          family_name: r.family_name,
+          family_color: r.family_color,
+          is_partnership_group: r.is_partnership, // קבוצה כולה היא של רוכשי שותפות
+          members: []
+        });
+      }
+      byFamily.get(r.family_id).members.push(r);
+    });
+    const mainGroups = [];
+    const partnershipGroups = [];
+    byFamily.forEach(g => {
+      if (g.members.length >= GROUP_VIEW_THRESHOLD) {
+        if (g.is_partnership_group) partnershipGroups.push(g);
+        else mainGroups.push(g);
+      } else if (g.is_partnership_group) {
+        // קבוצת שותפות קטנה — מוצגת בכל זאת בסקציית השותפות (חשוב לראות את כולם)
+        partnershipGroups.push(g);
+      } else {
+        g.members.forEach(m => ungrouped.push(m));
+      }
+    });
+    // אם יש רוכשי שותפות בודדים (ללא קבוצה) — נצרף אותם כקבוצה וירטואלית
+    if (partnershipSingles.length > 0) {
+      partnershipGroups.push({
+        family_id: '__partnership_singles__',
+        family_name: 'רוכשי שותפות בודדים (ללא קבוצת משפחה)',
+        family_color: '#3b82f6',
+        is_partnership_group: true,
+        is_virtual: true,
+        members: partnershipSingles
+      });
+    }
+    [...mainGroups, ...partnershipGroups].forEach(g => {
+      g.total_effective_area = g.members.reduce((s, m) => s + (m.effective_area || 0), 0);
+      g.total_registered_area = g.members.reduce((s, m) => s + (m.registered_area || 0), 0);
+      g.all_parcels = [...new Set(g.members.flatMap(m => m.parcels_array || []))].sort((a, b) => Number(a) - Number(b));
+      g.companies_count = g.members.filter(m => (m.owner_name || '').includes('בע"מ')).length;
+    });
+    mainGroups.sort((a, b) => b.total_effective_area - a.total_effective_area);
+    partnershipGroups.sort((a, b) => b.total_effective_area - a.total_effective_area);
+    ungrouped.sort((a, b) => (b.effective_area || 0) - (a.effective_area || 0));
+    return { mainGroups, partnershipGroups, ungrouped };
+  }
+
   function renderSignedList() {
     const container = document.getElementById('signed-list-container');
     const rows = applySignedFilters();
+    updateGroupToggleLabel();
     if (rows.length === 0) {
       container.innerHTML = `<div style="text-align:center;padding:40px;color:#6b7280;">לא נמצאו תוצאות לפי המסננים</div>`;
       return;
     }
+    const fmt = n => n ? Number(n).toLocaleString('he-IL', {maximumFractionDigits: 2}) : '—';
+
+    if (signedGroupViewMode) {
+      const { mainGroups, partnershipGroups, ungrouped } = groupRowsByFamily(rows);
+
+      // פונקציית עזר לרינדור כרטיס קבוצה
+      const renderGroupCard = (g, isPartnership) => {
+        const color = g.family_color || '#6366f1';
+        const parcelsStr = g.all_parcels.join(', ');
+        const tag = isPartnership
+          ? `<span style="display:inline-block;padding:2px 6px;border-radius:6px;background:#dbeafe;color:#1e40af;font-size:0.72rem;font-weight:600;margin-right:6px;">🔵 הסכם נפרד</span>`
+          : '';
+        return `
+          <div style="background:#fff;border-radius:8px;border:2px solid ${color};padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:240px;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                <span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:${color};"></span>
+                <span style="font-weight:700;font-size:1.05rem;color:#1f2937;">${escHtml(g.family_name)}</span>
+                ${tag}
+              </div>
+              <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:0.88rem;color:#4b5563;">
+                <span title="מספר חברים בקבוצה">👥 <strong>${g.members.length}</strong> חברים</span>
+                ${g.companies_count > 0 ? `<span title="מתוכם חברות בע&quot;מ">🏢 ${g.companies_count} חברות</span>` : ''}
+                <span title="סך השטח לאיחוד מצרפי">📐 <strong>${fmt(g.total_effective_area)}</strong> מ"ר לאיחוד</span>
+                ${g.all_parcels.length > 0 ? `<span title="חלקות שהקבוצה מחזיקה בהן">🗺 חלקות: <strong>${parcelsStr}</strong></span>` : ''}
+              </div>
+            </div>
+            <button class="btn-sm btn-view" onclick="window.openFamilyDetailModal('${g.family_id}')" style="background:${color};color:#fff;border:none;padding:8px 16px;font-weight:600;">👁 הצג פירוט פנימי</button>
+          </div>
+        `;
+      };
+
+      let html = '';
+
+      // סקציה 1: קבוצות בעלי קרקע ראשיות (הסכם הניהול 2015)
+      if (mainGroups.length > 0) {
+        html += `
+          <div style="margin-bottom:8px;color:#6b7280;font-size:0.85rem;font-weight:600;">
+            🏘 קבוצות בעלי קרקע ראשיות (חתומים על הסכם הניהול 2015)
+          </div>
+          <div style="display:grid;gap:12px;margin-bottom:20px;">
+            ${mainGroups.map(g => renderGroupCard(g, false)).join('')}
+          </div>
+        `;
+      }
+
+      // סקציה 2: קבוצות רוכשי שותפות (הסכם נפרד)
+      if (partnershipGroups.length > 0) {
+        const totalMembers = partnershipGroups.reduce((s, g) => s + g.members.length, 0);
+        const totalArea = partnershipGroups.reduce((s, g) => s + g.total_effective_area, 0);
+        html += `
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+              <div style="font-weight:600;color:#1e40af;">
+                🔵 קבוצות רוכשי שותפות (הסכם נפרד עם השותפות)
+              </div>
+              <div style="font-size:0.82rem;color:#3730a3;">
+                ${partnershipGroups.length} קבוצות · ${totalMembers} חברים · ${fmt(totalArea)} מ"ר
+              </div>
+            </div>
+            <div style="font-size:0.78rem;color:#1e3a8a;margin-top:4px;">
+              ⚠ מחויבים בהסכם נפרד לתשלום דמי ייזום — לא במסגרת הסכם הניהול הראשי. כוללים: דודי יצחקי, נדלן נדלן, ארד, שירה, וזוב.
+            </div>
+          </div>
+          <div style="display:grid;gap:12px;margin-bottom:20px;">
+            ${partnershipGroups.map(g => renderGroupCard(g, true)).join('')}
+          </div>
+        `;
+      }
+
+      if (ungrouped.length === 0) {
+        container.innerHTML = html + `<div style="text-align:center;color:#6b7280;font-size:0.9rem;margin-top:12px;">כל ${rows.length} התוצאות מקובצות.</div>`;
+        return;
+      }
+      container.innerHTML = html + `<div style="margin-top:8px;color:#6b7280;font-size:0.9rem;font-weight:500;">📋 בעלים בודדים וקבוצות קטנות (${ungrouped.length}):</div>`;
+      renderRegularTable(ungrouped, container, true);
+      return;
+    }
+
+    renderRegularTable(rows, container, false);
+  }
+
+  function renderRegularTable(rows, container, appendMode) {
     const fmt = n => n ? Number(n).toLocaleString('he-IL', {maximumFractionDigits: 2}) : '—';
     let html = `
       <div style="overflow-x:auto;background:#fff;border-radius:8px;border:1px solid #e5e7eb;">
@@ -4456,8 +4637,150 @@
     });
     html += `</tbody></table></div>
       <div style="margin-top:10px;color:#6b7280;font-size:0.85rem;">סה"כ ${rows.length} בעלי קרקע מתוך ${allSignedListData.length} · 💡 קליק על שורה פותח מודאל עם פירוט החלקות</div>`;
-    container.innerHTML = html;
+    if (appendMode) {
+      container.innerHTML += html;
+    } else {
+      container.innerHTML = html;
+    }
   }
+
+  // ============================================================
+  // מודאל פירוט חברי קבוצה — נפתח מתצוגה קבוצתית
+  // ============================================================
+  window.openFamilyDetailModal = function(familyId) {
+    // טיפול בקבוצה וירטואלית של רוכשי שותפות בודדים
+    let members;
+    let isVirtualPartnership = false;
+    let virtualName = '';
+    if (familyId === '__partnership_singles__') {
+      members = allSignedListData.filter(d => d.is_partnership && !d.family_id);
+      isVirtualPartnership = true;
+      virtualName = 'רוכשי שותפות בודדים (ללא קבוצת משפחה)';
+    } else {
+      members = allSignedListData.filter(d => d.family_id === familyId);
+    }
+    if (members.length === 0) { alert('לא נמצאו חברים בקבוצה'); return; }
+    const fam = members[0];
+    const isPartnership = isVirtualPartnership || fam.is_partnership;
+    const color = isVirtualPartnership ? '#3b82f6' : (fam.family_color || '#6366f1');
+    const fmt2 = n => n != null ? Number(n).toLocaleString('he-IL', {maximumFractionDigits: 2}) : '—';
+    const totalEffective = members.reduce((s, m) => s + (m.effective_area || 0), 0);
+    const totalRegistered = members.reduce((s, m) => s + (m.registered_area || 0), 0);
+    const allParcels = [...new Set(members.flatMap(m => m.parcels_array || []))].sort((a, b) => Number(a) - Number(b));
+    const companies = members.filter(m => (m.owner_name || '').includes('בע"מ'));
+    const individuals = members.filter(m => !(m.owner_name || '').includes('בע"מ'));
+
+    const parcelOptions = ['<option value="">— כל החלקות —</option>']
+      .concat(allParcels.map(p => `<option value="${p}">חלקה ${p}</option>`)).join('');
+
+    const overlay = document.getElementById('family-detail-modal');
+    const content = document.getElementById('family-detail-content');
+    const partnershipBanner = isPartnership ? `
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 14px;margin-bottom:12px;color:#1e3a8a;font-size:0.9rem;">
+        🔵 <strong>קבוצת רוכשי שותפות — הסכם נפרד.</strong> חברי קבוצה זו מחויבים בהסכם נפרד עם השותפות (חנן מור) לתשלום דמי ייזום, ולא במסגרת הסכם הניהול 2015. הם מופיעים כאן לצורכי שליטה וניהול מידע בלבד.
+      </div>
+    ` : '';
+    const groupTitle = isVirtualPartnership ? virtualName : fam.family_name;
+    content.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:3px solid ${color};padding-bottom:10px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="display:inline-block;width:16px;height:16px;border-radius:4px;background:${color};"></span>
+            <h2 style="margin:0;font-size:1.25rem;">${escHtml(groupTitle)}</h2>
+            ${isPartnership ? '<span style="display:inline-block;padding:2px 8px;border-radius:6px;background:#dbeafe;color:#1e40af;font-size:0.78rem;font-weight:600;">🔵 הסכם נפרד</span>' : ''}
+          </div>
+          <div style="margin-top:6px;display:flex;gap:14px;flex-wrap:wrap;font-size:0.88rem;color:#4b5563;">
+            <span>👥 <strong>${members.length}</strong> חברים (${companies.length} חברות · ${individuals.length} יחידים)</span>
+            <span>📐 <strong>${fmt2(totalEffective)}</strong> מ"ר לאיחוד</span>
+            <span>📋 <strong>${fmt2(totalRegistered)}</strong> מ"ר רשום</span>
+            <span>🗺 חלקות: <strong>${allParcels.join(', ')}</strong></span>
+          </div>
+        </div>
+        <button class="btn-sm" onclick="window.closeFamilyDetailModal()" style="background:#f3f4f6;">✕ סגור</button>
+      </div>
+      ${partnershipBanner}
+
+      <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="text" id="fam-detail-search" placeholder="🔍 חיפוש לפי שם או ת.ז..." style="flex:1;min-width:200px;padding:8px;border:1px solid #d1d5db;border-radius:4px;">
+        <select id="fam-detail-parcel-filter" style="padding:8px;border:1px solid #d1d5db;border-radius:4px;">
+          ${parcelOptions}
+        </select>
+        <select id="fam-detail-type-filter" style="padding:8px;border:1px solid #d1d5db;border-radius:4px;">
+          <option value="">— הכל —</option>
+          <option value="company">🏢 רק חברות</option>
+          <option value="individual">👤 רק יחידים</option>
+        </select>
+      </div>
+
+      <div id="fam-detail-table-container" style="max-height:60vh;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;"></div>
+
+      <div style="margin-top:10px;font-size:0.82rem;color:#6b7280;">💡 קליק על שורה פותח את המודאל המלא של בעל הקרקע (פרטים, חלקות, עריכה).</div>
+    `;
+    overlay.classList.add('show');
+
+    const renderFamDetailTable = () => {
+      const search = (document.getElementById('fam-detail-search').value || '').trim().toLowerCase();
+      const parcelF = document.getElementById('fam-detail-parcel-filter').value;
+      const typeF = document.getElementById('fam-detail-type-filter').value;
+      const filtered = members.filter(m => {
+        if (search && !(m.owner_name.toLowerCase().includes(search) || (m.id_number || '').includes(search))) return false;
+        if (parcelF && !(m.parcels_array || []).some(p => String(p) === String(parcelF))) return false;
+        if (typeF === 'company' && !(m.owner_name || '').includes('בע"מ')) return false;
+        if (typeF === 'individual' && (m.owner_name || '').includes('בע"מ')) return false;
+        return true;
+      });
+      // מיון לפי שטח לאיחוד — מהגבוה לנמוך (לפי בקשת המשתמש)
+      filtered.sort((a, b) => (b.effective_area || 0) - (a.effective_area || 0));
+      const tableCont = document.getElementById('fam-detail-table-container');
+      if (filtered.length === 0) {
+        tableCont.innerHTML = `<div style="padding:30px;text-align:center;color:#9ca3af;">לא נמצאו תוצאות</div>`;
+        return;
+      }
+      let html = `
+        <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+          <thead style="background:#f9fafb;position:sticky;top:0;z-index:1;">
+            <tr>
+              <th style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;">שם</th>
+              <th style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;">ת.ז / ח.פ.</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">חלקות</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">שטח לאיחוד</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">סוג</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">קטגוריה</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      filtered.forEach(m => {
+        const isCompany = (m.owner_name || '').includes('בע"מ');
+        const parcels = (m.parcels_array || []).join(', ') || '—';
+        html += `
+          <tr style="border-bottom:1px solid #f3f4f6;cursor:pointer;" onclick="window.closeFamilyDetailModal();window.openSignedDetailModal('${m.id}')">
+            <td style="padding:7px 8px;font-weight:500;">${escHtml(m.owner_name)}</td>
+            <td style="padding:7px 8px;font-family:monospace;color:#6b7280;font-size:0.82rem;">${m.id_number || '—'}</td>
+            <td style="padding:7px 8px;text-align:center;">${parcels}</td>
+            <td style="padding:7px 8px;text-align:center;font-weight:600;">${fmt2(m.effective_area)}</td>
+            <td style="padding:7px 8px;text-align:center;">${isCompany ? '🏢 חברה' : '👤 יחיד'}</td>
+            <td style="padding:7px 8px;text-align:center;">${categoryBadge(m.ownership_category)}</td>
+          </tr>
+        `;
+      });
+      html += `</tbody></table>`;
+      tableCont.innerHTML = html;
+    };
+    document.getElementById('fam-detail-search').addEventListener('input', renderFamDetailTable);
+    document.getElementById('fam-detail-parcel-filter').addEventListener('change', renderFamDetailTable);
+    document.getElementById('fam-detail-type-filter').addEventListener('change', renderFamDetailTable);
+    renderFamDetailTable();
+  };
+
+  window.closeFamilyDetailModal = function() {
+    document.getElementById('family-detail-modal').classList.remove('show');
+  };
+
+  document.getElementById('family-detail-modal').addEventListener('click', function(e) {
+    if (e.target === this) window.closeFamilyDetailModal();
+  });
+
 
   // ============================================================
   // מודאל פרטי בעל קרקע — תצוגה ועריכה
@@ -4708,6 +5031,12 @@
   document.getElementById('signed-legal-filter').addEventListener('change', () => renderSignedList());
   document.getElementById('signed-monday-filter').addEventListener('change', () => renderSignedList());
   document.getElementById('signed-category-filter').addEventListener('change', () => renderSignedList());
+  // כפתור מתג תצוגה קבוצתית
+  document.getElementById('signed-group-toggle-btn').addEventListener('click', () => {
+    signedGroupViewMode = !signedGroupViewMode;
+    localStorage.setItem('signedGroupViewMode', signedGroupViewMode ? 'true' : 'false');
+    renderSignedList();
+  });
   document.getElementById('signed-refresh-btn').addEventListener('click', loadSignedList);
   document.getElementById('signed-export-btn').addEventListener('click', exportSignedListCSV);
   // סגירת מודאל בלחיצה על הרקע
