@@ -1067,6 +1067,14 @@
       <div class="label">🏢 רוכשי יחידות שותפות</div>
       <div class="value" id="stat-signed-partnership-units" style="font-size:1.2rem;">-</div>
     </div>
+    <div class="stat-card" style="background:#f0fdf4;border-color:#16a34a;" title="סך השטח הרשום בטאבו של כל החתומים הפעילים — לפני מקדם השתתפות.">
+      <div class="label">📐 שטח חתום (טאבו)</div>
+      <div class="value" id="stat-signed-total-area" style="font-size:1.2rem;color:#16a34a;">-</div>
+    </div>
+    <div class="stat-card gold" title="השטח שבאמת נכנס לאיחוד וחלוקה — אחרי מקדם השתתפות של כל חלקה. זה הבסיס לחישוב ההקצאה במצב היוצא.">
+      <div class="label">🎯 שטח לאיחוד וחלוקה</div>
+      <div class="value" id="stat-signed-unification-area" style="font-size:1.2rem;">-</div>
+    </div>
   </div>
 
   <div class="filters-bar" style="flex-wrap:wrap;">
@@ -4347,6 +4355,28 @@
     const areaFmt = pu.partnership_units_area ? Math.round(pu.partnership_units_area).toLocaleString('he-IL') + ' מ"ר' : '0 מ"ר';
     document.getElementById('stat-signed-partnership-units').innerHTML =
       `${pu.partnership_units_count}<div style="font-size:0.7rem;color:#6b7280;margin-top:4px;">${areaFmt}</div>`;
+
+    // 📐 חישוב שטח חתום (טאבו) + שטח לאיחוד (אחרי מקדם השתתפות)
+    let totalSignedArea = 0;
+    let totalUnificationArea = 0;
+    allSignedListData.forEach(d => {
+      (d.parcel_records || []).forEach(pr => {
+        totalSignedArea += pr.registered || 0;
+        totalUnificationArea += pr.effective || 0;
+      });
+    });
+    const signedAreaEl = document.getElementById('stat-signed-total-area');
+    const unifAreaEl = document.getElementById('stat-signed-unification-area');
+    if (signedAreaEl) {
+      const dunams = (totalSignedArea / 1000).toFixed(1);
+      signedAreaEl.innerHTML = `${Math.round(totalSignedArea).toLocaleString('he-IL')}<div style="font-size:0.7rem;color:#6b7280;margin-top:4px;">${dunams} דונם</div>`;
+    }
+    if (unifAreaEl) {
+      const dunams = (totalUnificationArea / 1000).toFixed(1);
+      const pct = totalSignedArea > 0 ? ((totalUnificationArea / totalSignedArea) * 100).toFixed(1) : 0;
+      const pctFrom439 = ((totalUnificationArea / 439608) * 100).toFixed(1);
+      unifAreaEl.innerHTML = `${Math.round(totalUnificationArea).toLocaleString('he-IL')}<div style="font-size:0.7rem;color:#6b7280;margin-top:4px;">${dunams} דונם (${pct}% מהחתום, ${pctFrom439}% מ-439 דונם)</div>`;
+    }
   }
 
   function applySignedFilters() {
