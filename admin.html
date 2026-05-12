@@ -4502,25 +4502,38 @@
     if (signedGroupViewMode) {
       const { mainGroups, partnershipGroups, ungrouped } = groupRowsByFamily(rows);
 
-      // פונקציית עזר לרינדור כרטיס קבוצה
-      const renderGroupCard = (g, isPartnership) => {
+      // איחוד כל הקבוצות לרשימה אחת ממוינת לפי שטח לאיחוד (יורד)
+      const allGroups = [...mainGroups, ...partnershipGroups]
+        .sort((a, b) => b.total_effective_area - a.total_effective_area);
+
+      // חישוב סטטיסטיקה כללית של התצוגה הנוכחית
+      const allMembersCount = allGroups.reduce((s, g) => s + g.members.length, 0) + ungrouped.length;
+      const allEffectiveArea = allGroups.reduce((s, g) => s + g.total_effective_area, 0) +
+                               ungrouped.reduce((s, m) => s + (m.effective_area || 0), 0);
+      const allRegisteredArea = allGroups.reduce((s, g) => s + g.total_registered_area, 0) +
+                                ungrouped.reduce((s, m) => s + (m.registered_area || 0), 0);
+
+      // פונקציית עזר לרינדור כרטיס קבוצה — עיצוב אחיד עם תיוג סטטוס
+      const renderGroupCard = (g) => {
         const color = g.family_color || '#6366f1';
         const parcelsStr = g.all_parcels.join(', ');
-        const tag = isPartnership
-          ? `<span style="display:inline-block;padding:2px 6px;border-radius:6px;background:#dbeafe;color:#1e40af;font-size:0.72rem;font-weight:600;margin-right:6px;">🔵 הסכם נפרד</span>`
-          : '';
+        // תיוג סטטוס משפטי לפי סוג הקבוצה
+        const statusTag = g.is_partnership_group
+          ? `<span style="display:inline-block;padding:2px 8px;border-radius:6px;background:#dbeafe;color:#1e40af;font-size:0.74rem;font-weight:600;">🔵 הסכם נפרד עם השותפות</span>`
+          : `<span style="display:inline-block;padding:2px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-size:0.74rem;font-weight:600;">🟢 הסכם הניהול 2015</span>`;
         return `
           <div style="background:#fff;border-radius:8px;border:2px solid ${color};padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
             <div style="flex:1;min-width:240px;">
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
                 <span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:${color};"></span>
                 <span style="font-weight:700;font-size:1.05rem;color:#1f2937;">${escHtml(g.family_name)}</span>
-                ${tag}
+                ${statusTag}
               </div>
               <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:0.88rem;color:#4b5563;">
                 <span title="מספר חברים בקבוצה">👥 <strong>${g.members.length}</strong> חברים</span>
                 ${g.companies_count > 0 ? `<span title="מתוכם חברות בע&quot;מ">🏢 ${g.companies_count} חברות</span>` : ''}
-                <span title="סך השטח לאיחוד מצרפי">📐 <strong>${fmt(g.total_effective_area)}</strong> מ"ר לאיחוד</span>
+                <span title="סך השטח הרשום בטאבו">📋 <strong>${fmt(g.total_registered_area)}</strong> מ"ר רשום</span>
+                <span title="סך השטח אחרי מקדם השמאי (נכנס לאיחוד וחלוקה)">📐 <strong>${fmt(g.total_effective_area)}</strong> מ"ר לאיחוד</span>
                 ${g.all_parcels.length > 0 ? `<span title="חלקות שהקבוצה מחזיקה בהן">🗺 חלקות: <strong>${parcelsStr}</strong></span>` : ''}
               </div>
             </div>
@@ -4529,42 +4542,27 @@
         `;
       };
 
-      let html = '';
-
-      // סקציה 1: קבוצות בעלי קרקע ראשיות (הסכם הניהול 2015)
-      if (mainGroups.length > 0) {
-        html += `
-          <div style="margin-bottom:8px;color:#6b7280;font-size:0.85rem;font-weight:600;">
-            🏘 קבוצות בעלי קרקע ראשיות (חתומים על הסכם הניהול 2015)
-          </div>
-          <div style="display:grid;gap:12px;margin-bottom:20px;">
-            ${mainGroups.map(g => renderGroupCard(g, false)).join('')}
-          </div>
-        `;
-      }
-
-      // סקציה 2: קבוצות רוכשי שותפות (הסכם נפרד)
-      if (partnershipGroups.length > 0) {
-        const totalMembers = partnershipGroups.reduce((s, g) => s + g.members.length, 0);
-        const totalArea = partnershipGroups.reduce((s, g) => s + g.total_effective_area, 0);
-        html += `
-          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-              <div style="font-weight:600;color:#1e40af;">
-                🔵 קבוצות רוכשי שותפות (הסכם נפרד עם השותפות)
-              </div>
-              <div style="font-size:0.82rem;color:#3730a3;">
-                ${partnershipGroups.length} קבוצות · ${totalMembers} חברים · ${fmt(totalArea)} מ"ר
-              </div>
-            </div>
-            <div style="font-size:0.78rem;color:#1e3a8a;margin-top:4px;">
-              ⚠ מחויבים בהסכם נפרד לתשלום דמי ייזום — לא במסגרת הסכם הניהול הראשי. כוללים: דודי יצחקי, נדלן נדלן, ארד, שירה, וזוב.
+      // סטטיסטיקה כללית בראש המסך
+      let html = `
+        <div style="background:linear-gradient(135deg,#eef2ff 0%,#fdf4ff 100%);border:1px solid #c7d2fe;border-radius:10px;padding:14px 18px;margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
+            <div style="font-weight:700;font-size:1rem;color:#3730a3;">📊 סיכום מצרפי של כל בעלי הקרקע במערכת</div>
+            <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.9rem;">
+              <span title="כל בעלי קרקע במערכת — יחידים וחברות"><strong style="color:#3730a3;">👥 ${allMembersCount}</strong> בעלים</span>
+              <span title="קבוצות עם 15+ חברים"><strong style="color:#3730a3;">📂 ${allGroups.length}</strong> קבוצות גדולות</span>
+              <span title="סך השטח הרשום בטאבו (מ&quot;ר)"><strong style="color:#1e40af;">📋 ${fmt(allRegisteredArea)}</strong> מ"ר רשום</span>
+              <span title="סך השטח הנכנס לאיחוד וחלוקה אחרי מקדם השמאי"><strong style="color:#16a34a;">📐 ${fmt(allEffectiveArea)}</strong> מ"ר לאיחוד</span>
             </div>
           </div>
-          <div style="display:grid;gap:12px;margin-bottom:20px;">
-            ${partnershipGroups.map(g => renderGroupCard(g, true)).join('')}
+          <div style="font-size:0.78rem;color:#6b7280;margin-top:6px;">
+            💡 לחיצה על "הצג פירוט פנימי" של קבוצה תפתח טבלה עם כל החברים, ממוינים לפי שטח מהגדול לקטן
           </div>
-        `;
+        </div>
+      `;
+
+      // כל הקבוצות יחד (מעורבבות לפי שטח), עיצוב אחיד
+      if (allGroups.length > 0) {
+        html += `<div style="display:grid;gap:12px;margin-bottom:16px;">${allGroups.map(g => renderGroupCard(g)).join('')}</div>`;
       }
 
       if (ungrouped.length === 0) {
@@ -4716,7 +4714,7 @@
 
       <div style="margin-top:10px;font-size:0.82rem;color:#6b7280;">💡 קליק על שורה פותח את המודאל המלא של בעל הקרקע (פרטים, חלקות, עריכה).</div>
     `;
-    overlay.classList.add('show');
+    overlay.classList.add('visible');
 
     const renderFamDetailTable = () => {
       const search = (document.getElementById('fam-detail-search').value || '').trim().toLowerCase();
@@ -4743,7 +4741,8 @@
               <th style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;">שם</th>
               <th style="padding:8px;text-align:right;border-bottom:1px solid #e5e7eb;">ת.ז / ח.פ.</th>
               <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">חלקות</th>
-              <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">שטח לאיחוד</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;" title="שטח רשום בטאבו (לפני מקדם)">שטח רשום</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;" title="שטח אחרי מקדם השמאי (נכנס לאיחוד וחלוקה)">שטח לאיחוד</th>
               <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">סוג</th>
               <th style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">קטגוריה</th>
             </tr>
@@ -4758,6 +4757,7 @@
             <td style="padding:7px 8px;font-weight:500;">${escHtml(m.owner_name)}</td>
             <td style="padding:7px 8px;font-family:monospace;color:#6b7280;font-size:0.82rem;">${m.id_number || '—'}</td>
             <td style="padding:7px 8px;text-align:center;">${parcels}</td>
+            <td style="padding:7px 8px;text-align:center;color:#6b7280;">${fmt2(m.registered_area)}</td>
             <td style="padding:7px 8px;text-align:center;font-weight:600;">${fmt2(m.effective_area)}</td>
             <td style="padding:7px 8px;text-align:center;">${isCompany ? '🏢 חברה' : '👤 יחיד'}</td>
             <td style="padding:7px 8px;text-align:center;">${categoryBadge(m.ownership_category)}</td>
@@ -4774,7 +4774,7 @@
   };
 
   window.closeFamilyDetailModal = function() {
-    document.getElementById('family-detail-modal').classList.remove('show');
+    document.getElementById('family-detail-modal').classList.remove('visible');
   };
 
   document.getElementById('family-detail-modal').addEventListener('click', function(e) {
