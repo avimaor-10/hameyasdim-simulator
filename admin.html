@@ -4548,8 +4548,9 @@
           const entry = parcelMap.get(pr.parcel);
           entry.signed_effective += (pr.effective || 0);
           entry.signed_registered += (pr.registered || 0);
-          // בעלים פעיל = לא קוזז ע"י עסקה (`deducted_by_deal` קרוב ל-0)
-          if (!pr.deducted_by_deal || pr.deducted_by_deal < 0.01) {
+          // בעלים פעיל = יש לו עדיין שארית בעלות (גם אם קוזז חלקית מעסקה אחרת)
+          const residual = (pr.registered || 0) - (pr.deducted_by_deal || 0);
+          if (residual > 0.01) {
             entry.active_signed_count += 1;
           }
         });
@@ -4809,7 +4810,9 @@
         const e = dealParcelMap.get(pr.parcel);
         e.signed_effective += (pr.effective || 0);
         e.signed_registered += (pr.registered || 0);
-        if (!pr.deducted_by_deal || pr.deducted_by_deal < 0.01) e.active_signed_count += 1;
+        // בעלים פעיל = יש לו שארית בעלות (גם אם קוזז חלקית)
+        const residual = (pr.registered || 0) - (pr.deducted_by_deal || 0);
+        if (residual > 0.01) e.active_signed_count += 1;
       });
     });
     familyDeals.forEach(d => {
