@@ -1838,11 +1838,19 @@
 
   // השטח המשתתף בהקצאה לבעלים חתום בודד (אחרי הצמצום)
   // = (שטח רשום − שטח שהומר לעסקה) × מקדם השתתפות
+  // ⬇ תיקון 13/05/2026: אם unification_area מוגדר ושונה מ-agreement_area
+  //                     ואין דדוקציה — משתמשים בו ישירות (אלגוריתם ייחודי הוכברד וכד').
   function getOwnerEffectiveArea(owner) {
     if (!owner) return 0;
     const stored = parseFloat(owner.agreement_area) || parseFloat(owner.unification_area) || 0;
     const deduction = getOwnerRegisteredDeduction(owner);
     const netRegistered = Math.max(0, stored - deduction);
+    const unifOverride = parseFloat(owner.unification_area);
+    if (!isNaN(unifOverride) && unifOverride > 0
+        && Math.abs(unifOverride - stored) > 0.01
+        && deduction < 0.01) {
+      return unifOverride;
+    }
     return netRegistered * getParcelFactor(owner.parcel);
   }
 
@@ -4266,7 +4274,19 @@
       // קיזוז עסקאות מקור — אם הבעלים מכר חלק לשותפות, הוא לא מחזיק יותר את כל הרשום
       const deduction = getOwnerRegisteredDeduction(s);
       const netRegistered = Math.max(0, stored - deduction);
-      const effectiveArea = netRegistered * factor;
+      // ============================================================
+      // תיקון 13/05/2026 — אוברריידי ל-unification_area
+      // ============================================================
+      // אם `unification_area` מוגדר ושונה מ-`agreement_area` AND אין דדוקציה,
+      // משתמשים בו ישירות כשטח לאיחוד (אלגוריתם ייחודי, למשל הוכברד).
+      // אחרת — חישוב סטנדרטי: netRegistered × factor.
+      const unifOverride = parseFloat(s.unification_area);
+      const hasUnifOverride = !isNaN(unifOverride) && unifOverride > 0
+        && Math.abs(unifOverride - stored) > 0.01
+        && deduction < 0.01;
+      const effectiveArea = hasUnifOverride
+        ? unifOverride
+        : netRegistered * factor;
       const offsettingDealNums = getOffsettingDealNumbers(s);
 
       g.all_record_ids.push(s.id);
