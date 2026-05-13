@@ -4529,16 +4529,25 @@
       });
     }
     // ============================================================
-    // תיקון 13/05/2026 — חישוב טוטלים כולל עסקאות שותפות
+    // תיקון 13/05/2026 (v2) — נוסחה אחידה לחישוב טוטלים
     // ============================================================
-    // הבעיה הקודמת: total_effective_area חישב רק `signed_owners` בקבוצה.
-    // עבור קבוצת "רוכשי דודי יצחקי", 3 רשומות בחלקה 14 הן המוכרים המקוריים
-    // שהוחלפו ע"י עסקה #23. הם מקבלים effective=0 (קוזזו), אז הסכום הציג רק
-    // 1,546.5 מ"ר (חלק חלקה 19) במקום 10,208.5 (כולל תרומת העסקה).
+    // הבעיה הקודמת ב-v1: per-parcel "או signed או deal" — איבד שטחים כשהיה
+    // active signed + עסקה עצמאית על אותה חלקה (חנן מור השקעות: 150 ארד+שירה
+    // + 581 עסקת דרומי = 731, אבל v1 הציג 150 בלבד).
     //
-    // התיקון: לכל חלקה בקבוצה — לבחור בין שתי האופציות (בלי כפילויות):
-    //   • אם יש בעלים פעיל (לא קוזז) באותה חלקה → לסכום את signed_owners
-    //   • אחרת (כל הבעלים קוזזו או אין בעלים) → לסכום את שטח העסקה
+    // הפתרון: נוסחה אחידה שעובדת בכל המקרים בלי כפילות —
+    //   • signed_effective כבר מנוכה (= registered - deducted) * factor
+    //   • deal_area * factor = תרומת העסקה
+    //   • סכימה ישירה (signed_effective + deal*factor) לא יוצרת כפילות
+    //     כי signed_effective=0 כשהעסקה החליפה את הבעלים, ו>0 כשהם עצמאיים.
+    //   • totalRegistered = stillOwned (registered-deducted) + deal_area
+    //     מונע double-count כשעסקה החליפה (deducted ≈ deal_area).
+    //
+    // בדיקות:
+    //   • דודי ח'14: 0 + 10,208 → ✅ 10,208 לאיחוד, ✅ 10,208 רשום
+    //   • מועלם ח'9: 0 + 228 → ✅ 228 לאיחוד, ✅ 228 רשום
+    //   • חנן מור ח'18: 150 + 581 → ✅ 731 לאיחוד, ✅ 731 רשום (ארד+שירה ועסקה
+    //     הם מקטעים נפרדים של אותה חלקה, לא מחליפים זה את זה)
     // ============================================================
     [...mainGroups, ...partnershipGroups].forEach(g => {
       // 1. עסקאות שותפות שמקושרות לקבוצה (family_group_id)
@@ -4546,7 +4555,7 @@
         d.is_active && d.family_group_id === g.family_id
       );
 
-      // 2. מפה לפי חלקה: signed effective, signed registered, deal area
+      // 2. מפה לפי חלקה: signed effective, signed registered, signed deducted, deal area
       const parcelMap = new Map();
       const ensureParcelEntry = (parcel, factor) => {
         if (!parcelMap.has(parcel)) {
@@ -4555,7 +4564,7 @@
             factor: factor != null ? factor : 1,
             signed_effective: 0,
             signed_registered: 0,
-            active_signed_count: 0,
+            signed_deducted: 0,
             deal_area: 0,
             deal_count: 0,
           });
@@ -4568,11 +4577,7 @@
           const entry = parcelMap.get(pr.parcel);
           entry.signed_effective += (pr.effective || 0);
           entry.signed_registered += (pr.registered || 0);
-          // בעלים פעיל = יש לו עדיין שארית בעלות (גם אם קוזז חלקית מעסקה אחרת)
-          const residual = (pr.registered || 0) - (pr.deducted_by_deal || 0);
-          if (residual > 0.01) {
-            entry.active_signed_count += 1;
-          }
+          entry.signed_deducted += (pr.deducted_by_deal || 0);
         });
       });
       // איסוף עסקאות לפי חלקה
@@ -4586,20 +4591,13 @@
         entry.deal_count += 1;
       });
 
-      // 3. חישוב טוטלים — לכל חלקה לקחת רק אחת מהאופציות (מניעת כפילות)
+      // 3. חישוב טוטלים — נוסחה אחידה ללא כפילות
       let totalEffective = 0;
       let totalRegistered = 0;
       parcelMap.forEach(entry => {
-        if (entry.active_signed_count > 0) {
-          // יש בעלים פעיל באותה חלקה → signed מייצגים את התרומה
-          totalEffective += entry.signed_effective;
-          totalRegistered += entry.signed_registered;
-        } else {
-          // אין בעלים פעיל → תרומה מהעסקה (signed כבר קוזזו ל-0)
-          totalEffective += entry.deal_area * (entry.factor || 1);
-          // לרשום הצג את המקסימום — שטח המוכרים המקוריים או שטח העסקה (אותו דבר)
-          totalRegistered += Math.max(entry.signed_registered, entry.deal_area);
-        }
+        const stillOwnedRegistered = Math.max(0, entry.signed_registered - entry.signed_deducted);
+        totalEffective += entry.signed_effective + entry.deal_area * (entry.factor || 1);
+        totalRegistered += stillOwnedRegistered + entry.deal_area;
       });
 
       // אחסון פירוט לתצוגה
@@ -4806,7 +4804,12 @@
     const fmt2 = n => n != null ? Number(n).toLocaleString('he-IL', {maximumFractionDigits: 2}) : '—';
 
     // ============================================================
-    // תיקון 13/05/2026 — חישוב טוטלים כולל עסקאות שותפות (כמו ב-groupRowsByFamily)
+    // תיקון 13/05/2026 (v2) — נוסחה אחידה (זהה ל-groupRowsByFamily)
+    // ============================================================
+    // signed_effective כבר מנוכה (= registered - deducted) * factor
+    // deal_area * factor = תרומת העסקה
+    // totalEffective = signed_effective + deal_area * factor (סכימה ישירה ללא כפילות)
+    // totalRegistered = stillOwned + deal_area (stillOwned = registered - deducted)
     // ============================================================
     const familyDeals = (allDeals || []).filter(d =>
       d.is_active && d.family_group_id === familyId
@@ -4819,7 +4822,7 @@
           factor: factor != null ? factor : 1,
           signed_effective: 0,
           signed_registered: 0,
-          active_signed_count: 0,
+          signed_deducted: 0,
           deal_area: 0,
         });
       }
@@ -4830,9 +4833,7 @@
         const e = dealParcelMap.get(pr.parcel);
         e.signed_effective += (pr.effective || 0);
         e.signed_registered += (pr.registered || 0);
-        // בעלים פעיל = יש לו שארית בעלות (גם אם קוזז חלקית)
-        const residual = (pr.registered || 0) - (pr.deducted_by_deal || 0);
-        if (residual > 0.01) e.active_signed_count += 1;
+        e.signed_deducted += (pr.deducted_by_deal || 0);
       });
     });
     familyDeals.forEach(d => {
@@ -4844,13 +4845,9 @@
     let totalEffective = 0;
     let totalRegistered = 0;
     dealParcelMap.forEach(e => {
-      if (e.active_signed_count > 0) {
-        totalEffective += e.signed_effective;
-        totalRegistered += e.signed_registered;
-      } else {
-        totalEffective += e.deal_area * (e.factor || 1);
-        totalRegistered += Math.max(e.signed_registered, e.deal_area);
-      }
+      const stillOwnedRegistered = Math.max(0, e.signed_registered - e.signed_deducted);
+      totalEffective += e.signed_effective + e.deal_area * (e.factor || 1);
+      totalRegistered += stillOwnedRegistered + e.deal_area;
     });
     const signedOnlyEffective = members.reduce((s, m) => s + (m.effective_area || 0), 0);
     const dealsEffective = familyDeals.reduce((s, d) => {
