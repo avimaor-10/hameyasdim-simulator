@@ -4508,10 +4508,99 @@
         members: partnershipSingles
       });
     }
+    // ============================================================
+    // תיקון 13/05/2026 — חישוב טוטלים כולל עסקאות שותפות
+    // ============================================================
+    // הבעיה הקודמת: total_effective_area חישב רק `signed_owners` בקבוצה.
+    // עבור קבוצת "רוכשי דודי יצחקי", 3 רשומות בחלקה 14 הן המוכרים המקוריים
+    // שהוחלפו ע"י עסקה #23. הם מקבלים effective=0 (קוזזו), אז הסכום הציג רק
+    // 1,546.5 מ"ר (חלק חלקה 19) במקום 10,208.5 (כולל תרומת העסקה).
+    //
+    // התיקון: לכל חלקה בקבוצה — לבחור בין שתי האופציות (בלי כפילויות):
+    //   • אם יש בעלים פעיל (לא קוזז) באותה חלקה → לסכום את signed_owners
+    //   • אחרת (כל הבעלים קוזזו או אין בעלים) → לסכום את שטח העסקה
+    // ============================================================
     [...mainGroups, ...partnershipGroups].forEach(g => {
-      g.total_effective_area = g.members.reduce((s, m) => s + (m.effective_area || 0), 0);
-      g.total_registered_area = g.members.reduce((s, m) => s + (m.registered_area || 0), 0);
-      g.all_parcels = [...new Set(g.members.flatMap(m => m.parcels_array || []))].sort((a, b) => Number(a) - Number(b));
+      // 1. עסקאות שותפות שמקושרות לקבוצה (family_group_id)
+      const groupDeals = (allDeals || []).filter(d =>
+        d.is_active && d.family_group_id === g.family_id
+      );
+
+      // 2. מפה לפי חלקה: signed effective, signed registered, deal area
+      const parcelMap = new Map();
+      const ensureParcelEntry = (parcel, factor) => {
+        if (!parcelMap.has(parcel)) {
+          parcelMap.set(parcel, {
+            parcel,
+            factor: factor != null ? factor : 1,
+            signed_effective: 0,
+            signed_registered: 0,
+            active_signed_count: 0,
+            deal_area: 0,
+            deal_count: 0,
+          });
+        }
+      };
+      // איסוף signed_owners של הקבוצה לפי חלקה
+      g.members.forEach(m => {
+        (m.parcel_records || []).forEach(pr => {
+          ensureParcelEntry(pr.parcel, pr.factor);
+          const entry = parcelMap.get(pr.parcel);
+          entry.signed_effective += (pr.effective || 0);
+          entry.signed_registered += (pr.registered || 0);
+          // בעלים פעיל = לא קוזז ע"י עסקה (`deducted_by_deal` קרוב ל-0)
+          if (!pr.deducted_by_deal || pr.deducted_by_deal < 0.01) {
+            entry.active_signed_count += 1;
+          }
+        });
+      });
+      // איסוף עסקאות לפי חלקה
+      groupDeals.forEach(d => {
+        const dealFactor = (d.override_factor != null && d.override_factor !== '')
+          ? parseFloat(d.override_factor)
+          : getParcelFactor(d.parcel);
+        ensureParcelEntry(d.parcel, dealFactor);
+        const entry = parcelMap.get(d.parcel);
+        entry.deal_area += (parseFloat(d.area_sqm) || 0);
+        entry.deal_count += 1;
+      });
+
+      // 3. חישוב טוטלים — לכל חלקה לקחת רק אחת מהאופציות (מניעת כפילות)
+      let totalEffective = 0;
+      let totalRegistered = 0;
+      parcelMap.forEach(entry => {
+        if (entry.active_signed_count > 0) {
+          // יש בעלים פעיל באותה חלקה → signed מייצגים את התרומה
+          totalEffective += entry.signed_effective;
+          totalRegistered += entry.signed_registered;
+        } else {
+          // אין בעלים פעיל → תרומה מהעסקה (signed כבר קוזזו ל-0)
+          totalEffective += entry.deal_area * (entry.factor || 1);
+          // לרשום הצג את המקסימום — שטח המוכרים המקוריים או שטח העסקה (אותו דבר)
+          totalRegistered += Math.max(entry.signed_registered, entry.deal_area);
+        }
+      });
+
+      // אחסון פירוט לתצוגה
+      g.signed_only_effective = g.members.reduce((s, m) => s + (m.effective_area || 0), 0);
+      g.signed_only_registered = g.members.reduce((s, m) => s + (m.registered_area || 0), 0);
+      g.deals_count = groupDeals.length;
+      g.deals_area = groupDeals.reduce((s, d) => s + (parseFloat(d.area_sqm) || 0), 0);
+      g.deals_effective = groupDeals.reduce((s, d) => {
+        const f = (d.override_factor != null && d.override_factor !== '')
+          ? parseFloat(d.override_factor) : getParcelFactor(d.parcel);
+        return s + (parseFloat(d.area_sqm) || 0) * f;
+      }, 0);
+      g.deals_list = groupDeals; // לשימוש במודאל הפירוט
+
+      // טוטלים סופיים — כוללים גם עסקאות
+      g.total_effective_area = totalEffective;
+      g.total_registered_area = totalRegistered;
+
+      g.all_parcels = [...new Set([
+        ...g.members.flatMap(m => m.parcels_array || []),
+        ...groupDeals.map(d => d.parcel).filter(p => p)
+      ])].sort((a, b) => Number(a) - Number(b));
       g.companies_count = g.members.filter(m => (m.owner_name || '').includes('בע"מ')).length;
     });
     mainGroups.sort((a, b) => b.total_effective_area - a.total_effective_area);
@@ -4563,8 +4652,9 @@
               <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:0.88rem;color:#4b5563;">
                 <span title="מספר חברים בקבוצה">👥 <strong>${g.members.length}</strong> חברים</span>
                 ${g.companies_count > 0 ? `<span title="מתוכם חברות בע&quot;מ">🏢 ${g.companies_count} חברות</span>` : ''}
-                <span title="סך השטח הרשום בטאבו">📋 <strong>${fmt(g.total_registered_area)}</strong> מ"ר רשום</span>
-                <span title="סך השטח אחרי מקדם השמאי (נכנס לאיחוד וחלוקה)">📐 <strong>${fmt(g.total_effective_area)}</strong> מ"ר לאיחוד</span>
+                ${g.deals_count > 0 ? `<span title="עסקאות שותפות המקושרות לקבוצה" style="color:#7c3aed;">🤝 <strong>${g.deals_count}</strong> עסק${g.deals_count === 1 ? 'ה' : 'אות'}</span>` : ''}
+                <span title="סך השטח הרשום בטאבו (חברים פעילים + שטח עסקאות, ללא כפילויות)">📋 <strong>${fmt(g.total_registered_area)}</strong> מ"ר רשום</span>
+                <span title="סך השטח לאיחוד אחרי מקדם — חברים פעילים + עסקאות שותפות${g.deals_count > 0 ? `\nפירוט: ${fmt(g.signed_only_effective || 0)} (חברים) + ${fmt(g.deals_effective || 0)} (עסקאות)` : ''}">📐 <strong>${fmt(g.total_effective_area)}</strong> מ"ר לאיחוד</span>
                 ${g.all_parcels.length > 0 ? `<span title="חלקות שהקבוצה מחזיקה בהן">🗺 חלקות: <strong>${parcelsStr}</strong></span>` : ''}
               </div>
             </div>
@@ -4693,9 +4783,63 @@
     const isPartnership = isVirtualPartnership || fam.is_partnership;
     const color = isVirtualPartnership ? '#3b82f6' : (fam.family_color || '#6366f1');
     const fmt2 = n => n != null ? Number(n).toLocaleString('he-IL', {maximumFractionDigits: 2}) : '—';
-    const totalEffective = members.reduce((s, m) => s + (m.effective_area || 0), 0);
-    const totalRegistered = members.reduce((s, m) => s + (m.registered_area || 0), 0);
-    const allParcels = [...new Set(members.flatMap(m => m.parcels_array || []))].sort((a, b) => Number(a) - Number(b));
+
+    // ============================================================
+    // תיקון 13/05/2026 — חישוב טוטלים כולל עסקאות שותפות (כמו ב-groupRowsByFamily)
+    // ============================================================
+    const familyDeals = (allDeals || []).filter(d =>
+      d.is_active && d.family_group_id === familyId
+    );
+    const dealParcelMap = new Map();
+    const ensureParcel = (parcel, factor) => {
+      if (!dealParcelMap.has(parcel)) {
+        dealParcelMap.set(parcel, {
+          parcel,
+          factor: factor != null ? factor : 1,
+          signed_effective: 0,
+          signed_registered: 0,
+          active_signed_count: 0,
+          deal_area: 0,
+        });
+      }
+    };
+    members.forEach(m => {
+      (m.parcel_records || []).forEach(pr => {
+        ensureParcel(pr.parcel, pr.factor);
+        const e = dealParcelMap.get(pr.parcel);
+        e.signed_effective += (pr.effective || 0);
+        e.signed_registered += (pr.registered || 0);
+        if (!pr.deducted_by_deal || pr.deducted_by_deal < 0.01) e.active_signed_count += 1;
+      });
+    });
+    familyDeals.forEach(d => {
+      const f = (d.override_factor != null && d.override_factor !== '')
+        ? parseFloat(d.override_factor) : getParcelFactor(d.parcel);
+      ensureParcel(d.parcel, f);
+      dealParcelMap.get(d.parcel).deal_area += (parseFloat(d.area_sqm) || 0);
+    });
+    let totalEffective = 0;
+    let totalRegistered = 0;
+    dealParcelMap.forEach(e => {
+      if (e.active_signed_count > 0) {
+        totalEffective += e.signed_effective;
+        totalRegistered += e.signed_registered;
+      } else {
+        totalEffective += e.deal_area * (e.factor || 1);
+        totalRegistered += Math.max(e.signed_registered, e.deal_area);
+      }
+    });
+    const signedOnlyEffective = members.reduce((s, m) => s + (m.effective_area || 0), 0);
+    const dealsEffective = familyDeals.reduce((s, d) => {
+      const f = (d.override_factor != null && d.override_factor !== '')
+        ? parseFloat(d.override_factor) : getParcelFactor(d.parcel);
+      return s + (parseFloat(d.area_sqm) || 0) * f;
+    }, 0);
+
+    const allParcels = [...new Set([
+      ...members.flatMap(m => m.parcels_array || []),
+      ...familyDeals.map(d => d.parcel).filter(p => p)
+    ])].sort((a, b) => Number(a) - Number(b));
     const companies = members.filter(m => (m.owner_name || '').includes('בע"מ'));
     const individuals = members.filter(m => !(m.owner_name || '').includes('בע"מ'));
 
@@ -4719,11 +4863,15 @@
             ${isPartnership ? '<span style="display:inline-block;padding:2px 8px;border-radius:6px;background:#dbeafe;color:#1e40af;font-size:0.78rem;font-weight:600;">🔵 הסכם נפרד</span>' : ''}
           </div>
           <div style="margin-top:6px;display:flex;gap:14px;flex-wrap:wrap;font-size:0.88rem;color:#4b5563;">
-            <span>👥 <strong>${members.length}</strong> חברים (${companies.length} חברות · ${individuals.length} יחידים)</span>
-            <span>📐 <strong>${fmt2(totalEffective)}</strong> מ"ר לאיחוד</span>
+            <span>👥 <strong>${members.length}</strong> חברים (${companies.length} חברות · ${individuals.length} יחידים)${familyDeals.length > 0 ? ` <span style="color:#9333ea;">+ <strong>${familyDeals.length}</strong> עסק${familyDeals.length === 1 ? 'ה' : 'אות'} שותפות</span>` : ''}</span>
+            <span title="${familyDeals.length > 0 ? 'סך תרומה לאיחוד: signed_owners פעילים + עסקאות שותפות (ללא כפילויות)' : ''}">📐 <strong>${fmt2(totalEffective)}</strong> מ"ר לאיחוד</span>
             <span>📋 <strong>${fmt2(totalRegistered)}</strong> מ"ר רשום</span>
             <span>🗺 חלקות: <strong>${allParcels.join(', ')}</strong></span>
           </div>
+          ${familyDeals.length > 0 ? `
+            <div style="margin-top:6px;font-size:0.78rem;color:#7c3aed;background:#faf5ff;border:1px solid #e9d5ff;border-radius:4px;padding:6px 10px;display:inline-block;">
+              💡 התרומה לאיחוד מורכבת מ-<strong>${fmt2(signedOnlyEffective)}</strong> מ"ר (חברים פעילים) + <strong>${fmt2(dealsEffective)}</strong> מ"ר (עסקאות #${familyDeals.map(d => d.deal_number).join(', #')})
+            </div>` : ''}
         </div>
         <button class="btn-sm" onclick="window.closeFamilyDetailModal()" style="background:#f3f4f6;">✕ סגור</button>
       </div>
