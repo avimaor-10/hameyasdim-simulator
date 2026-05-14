@@ -4388,14 +4388,20 @@
     };
 
     // ============================================================
-    // 📊 חישוב 5 הבאקטים (14/05/2026) — קלף סיכום שטח תחת ניהולנו
+    // 📊 חישוב 5 הבאקטים (14/05/2026 — Phase B) — קלף סיכום שטח תחת ניהולנו
     // ============================================================
+    // ⚖ הבאקטים מבוססים על allocation_group_id (השכבה האופרטיבית)
+    //   ולא על family_group_id (השכבה המשפטית/דמי ייזום).
+    //
+    //   חבר עם allocation_group_id=NULL → נופל לבאקט "חתומים פרטיים"
+    //   (גם אם הוא בקבוצה משפטית — אדמין הוציא אותו מההקצאה).
+    //
     // הבאקטים:
-    //   1. נדל"ן נדל"ן       — family_id '50ee16ff-...' (5% של כל עסקה + עסקאות מלאות)
+    //   1. נדל"ן נדל"ן       — allocation '50ee16ff-...' (5% של כל עסקה + עסקאות מלאות)
     //   2. עודפות שותפות    — חנן מור השקעות + 4 חברות פרטיות (רכישות > 5%, כובע 2)
-    //   3. דודי יצחקי        — family_id 'a990ed96-...' (עסקאות #23-24)
+    //   3. דודי יצחקי        — allocation 'a990ed96-...' (עסקאות #23-24)
     //   4. עוצמה             — family שכוללת "עוצמה" בשם (141 רוכשי יחידות)
-    //   5. חתומים פרטיים     — כל השאר (משפחות + יחידים, ללא ישויות חברה)
+    //   5. חתומים פרטיים     — כל השאר (NULL allocation או קבוצות אחרות)
     // ============================================================
     const NADLAN_GROUP_ID = '50ee16ff-4025-479d-af57-9f56d0489305';
     const DUDI_GROUP_ID   = 'a990ed96-5b11-4d1a-9db1-89c76833af8b';
@@ -4407,7 +4413,7 @@
 
     const buckets = { nadlan: 0, overflow: 0, dudi: 0, otzma: 0, private: 0 };
 
-    // שלב 1: signed_owners — עם תמיכה ב-unification_area override (הוכברג) + ניכוי deducted_by_deal
+    // שלב 1: signed_owners — לפי allocation_group_id (Phase B)
     signed.forEach(s => {
       if (!s.is_active) return;
       const parcelMeta = parcelsMetaIdx[s.parcel];
@@ -4420,40 +4426,44 @@
       const hasOverride = unifArea > 0 && Math.abs(unifArea - agArea) > 0.01 && deducted < 0.01;
       const eff = hasOverride ? unifArea : residual * factor;
 
-      if (s.family_group_id === DUDI_GROUP_ID) {
+      // ⚖ allocation_group_id — לא family_group_id (השכבה האופרטיבית)
+      const allocId = s.allocation_group_id;
+      if (allocId === DUDI_GROUP_ID) {
         buckets.dudi += eff;
-      } else if (s.family_group_id === NADLAN_GROUP_ID) {
+      } else if (allocId === NADLAN_GROUP_ID) {
         buckets.nadlan += eff;
-      } else if (OTZMA_GROUP_ID && s.family_group_id === OTZMA_GROUP_ID) {
+      } else if (OTZMA_GROUP_ID && allocId === OTZMA_GROUP_ID) {
         buckets.otzma += eff;
-      } else if (PARTNERSHIP_OVERFLOW_IDS.has(s.family_group_id)) {
+      } else if (PARTNERSHIP_OVERFLOW_IDS.has(allocId)) {
         buckets.overflow += eff;
       } else {
+        // NULL allocation_group_id או קבוצות משפחה שאינן מוזכרות → באקט פרטיים
         buckets.private += eff;
       }
     });
 
-    // שלב 2: partnership_deals — להוסיף רק עסקאות שאינן מיוצגות ע"י signed_owners (buyers)
+    // שלב 2: partnership_deals — לפי allocation_group_id (Phase B)
     // • DUDI ו-OTZMA כבר מיוצגות ע"י signed_owners (rוkхים) — דילוג
     // • NADLAN: 4 החברות אינן ב-signed_owners עם שטח → להוסיף את העסקאות
     // • OVERFLOW (חנן מור השקעות + 4 חברות פרטיות): עסקאות עודף → באקט נפרד
     // • Private: רק שאר העסקאות (אם יש כאלה ללא קבוצה מזוהה)
     (allDeals || []).forEach(d => {
       if (!d.is_active) return;
-      if (d.family_group_id === DUDI_GROUP_ID) return;
-      if (OTZMA_GROUP_ID && d.family_group_id === OTZMA_GROUP_ID) return;
+      const allocId = d.allocation_group_id;
+      if (allocId === DUDI_GROUP_ID) return;
+      if (OTZMA_GROUP_ID && allocId === OTZMA_GROUP_ID) return;
 
       const parcelMeta = parcelsMetaIdx[d.parcel];
       const baseFactor = parcelMeta?.participation_factor != null ? parseFloat(parcelMeta.participation_factor) : 1;
       const factor = (d.override_factor != null && d.override_factor !== '') ? parseFloat(d.override_factor) : baseFactor;
       const eff = (parseFloat(d.area_sqm) || 0) * factor;
 
-      if (d.family_group_id === NADLAN_GROUP_ID) {
+      if (allocId === NADLAN_GROUP_ID) {
         buckets.nadlan += eff;
-      } else if (PARTNERSHIP_OVERFLOW_IDS.has(d.family_group_id)) {
+      } else if (PARTNERSHIP_OVERFLOW_IDS.has(allocId)) {
         buckets.overflow += eff;
       } else {
-        // עסקאות יוצאות-דופן ללא שיוך → באקט פרטיים
+        // עסקאות עם NULL allocation_group_id או קבוצות אחרות → באקט פרטיים
         buckets.private += eff;
       }
     });
