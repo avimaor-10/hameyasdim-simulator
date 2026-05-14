@@ -1042,6 +1042,84 @@
 <!-- ============================================================ -->
 <div class="tab-content" id="tab-signed-list">
 <div class="container">
+
+  <!-- ========================================================== -->
+  <!-- 📊 קלף סיכום 4 באקטים — מבט כללי על שטח תחת ניהולנו     -->
+  <!-- ========================================================== -->
+  <div id="four-buckets-card" style="
+    background: linear-gradient(135deg, #eef2ff 0%, #fef3c7 100%);
+    border: 2px solid #6366f1;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(99,102,241,0.12);
+  ">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+      <div>
+        <h2 style="margin:0; font-size:1.2rem; color:#1e3a8a; display:flex; align-items:center; gap:8px;">
+          📊 סיכום שטח תחת ניהולנו <span style="font-size:0.75rem; background:#6366f1; color:#fff; padding:3px 8px; border-radius:6px; font-weight:500;">4 באקטים</span>
+        </h2>
+        <div style="font-size:0.82rem; color:#6b7280; margin-top:4px;">
+          חלוקת השטח לאיחוד וחלוקה לפי קבוצות הקצאה (יעד: 330-350 דונם)
+        </div>
+      </div>
+      <div style="text-align:left;">
+        <div style="font-size:0.78rem; color:#6b7280;">סה"כ שטח לאיחוד:</div>
+        <div style="font-size:1.75rem; font-weight:800; color:#6366f1; line-height:1.1;">
+          <span id="four-buckets-total">—</span> <span style="font-size:1rem;">דונם</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+
+      <!-- באקט 1: רוכשי שותפות נדל"ן נדל"ן -->
+      <div class="bucket-card" style="background:#fff; border:1px solid #c7d2fe; border-radius:8px; padding:14px; text-align:center; border-top:4px solid #3b82f6; transition:transform 0.15s;">
+        <div style="font-size:0.78rem; color:#6b7280; margin-bottom:6px;" title="22 עסקאות של נדלן נדלן (4 חברות פרטיות) שרכשו מבעלי קרקע מקוריים">
+          🟦 רוכשי שותפות נדל"ן נדל"ן
+        </div>
+        <div style="font-size:1.5rem; font-weight:700; color:#3b82f6; line-height:1.1;" id="bucket-nadlan-value">—</div>
+        <div style="font-size:0.72rem; color:#9ca3af; margin-top:4px;">דונם</div>
+        <div style="font-size:0.82rem; color:#3b82f6; margin-top:6px; font-weight:600;" id="bucket-nadlan-pct">— %</div>
+      </div>
+
+      <!-- באקט 2: קבוצת דודי יצחקי -->
+      <div class="bucket-card" style="background:#fff; border:1px solid #fde68a; border-radius:8px; padding:14px; text-align:center; border-top:4px solid #f59e0b; transition:transform 0.15s;">
+        <div style="font-size:0.78rem; color:#6b7280; margin-bottom:6px;" title="עסקה #23 (דנקנר) + עסקה #24 (זייגרמן) — דודי יצחקי קנה ומכר לרוכשי יחידות">
+          🟧 קבוצת דודי יצחקי
+        </div>
+        <div style="font-size:1.5rem; font-weight:700; color:#f59e0b; line-height:1.1;" id="bucket-dudi-value">—</div>
+        <div style="font-size:0.72rem; color:#9ca3af; margin-top:4px;">דונם</div>
+        <div style="font-size:0.82rem; color:#f59e0b; margin-top:6px; font-weight:600;" id="bucket-dudi-pct">— %</div>
+      </div>
+
+      <!-- באקט 3: קבוצת עוצמה -->
+      <div class="bucket-card" style="background:#fff; border:1px solid #fbcfe8; border-radius:8px; padding:14px; text-align:center; border-top:4px solid #ec4899; transition:transform 0.15s;">
+        <div style="font-size:0.78rem; color:#6b7280; margin-bottom:6px;" title="141 רוכשי יחידות מעוצמה קונקשיין שרכשה מנועם יניר + עירית יוחננוף (פלדמן יעקב הסב)">
+          🟪 קבוצת עוצמה (יוחננוף+יניר)
+        </div>
+        <div style="font-size:1.5rem; font-weight:700; color:#ec4899; line-height:1.1;" id="bucket-otzma-value">—</div>
+        <div style="font-size:0.72rem; color:#9ca3af; margin-top:4px;">דונם</div>
+        <div style="font-size:0.82rem; color:#ec4899; margin-top:6px; font-weight:600;" id="bucket-otzma-pct">— %</div>
+      </div>
+
+      <!-- באקט 4: חתומים פרטיים -->
+      <div class="bucket-card" style="background:#fff; border:1px solid #bbf7d0; border-radius:8px; padding:14px; text-align:center; border-top:4px solid #10b981; transition:transform 0.15s;">
+        <div style="font-size:0.78rem; color:#6b7280; margin-bottom:6px;" title="כל המשפחות והיחידים החתומים על הסכם הניהול 2015 — הכי גדול מבין הבאקטים">
+          🟩 חתומים פרטיים (משפחות+יחידים)
+        </div>
+        <div style="font-size:1.5rem; font-weight:700; color:#10b981; line-height:1.1;" id="bucket-private-value">—</div>
+        <div style="font-size:0.72rem; color:#9ca3af; margin-top:4px;">דונם</div>
+        <div style="font-size:0.82rem; color:#10b981; margin-top:6px; font-weight:600;" id="bucket-private-pct">— %</div>
+      </div>
+
+    </div>
+
+    <div style="margin-top:14px; font-size:0.75rem; color:#6b7280; text-align:center; font-style:italic;">
+      💡 השטח מוצג לאחר מקדם השתתפות של השמאי (נכנס לאיחוד וחלוקה) | אומת לפי הסכמי 2015
+    </div>
+  </div>
+
   <div class="stats-grid">
     <div class="stat-card">
       <div class="label">סה"כ רשומות חתומים</div>
@@ -4205,6 +4283,59 @@
       partnership_units_area: hiddenArea,
       partnership_units_records: hiddenRecords.length,
     };
+
+    // ============================================================
+    // 📊 חישוב 4 הבאקטים (14/05/2026) — קלף סיכום שטח תחת ניהולנו
+    // ============================================================
+    // הבאקטים:
+    //   1. נדל"ן נדל"ן  — family_id '50ee16ff-...' (4 חברות + 22 עסקאות)
+    //   2. דודי יצחקי   — family_id 'a990ed96-...' (עסקאות #23-24)
+    //   3. עוצמה        — family שכוללת "עוצמה" בשם (141 רוכשי יחידות)
+    //   4. חתומים פרטיים — כל השאר (משפחות + יחידים)
+    // ============================================================
+    const NADLAN_GROUP_ID = '50ee16ff-4025-479d-af57-9f56d0489305';
+    const DUDI_GROUP_ID   = 'a990ed96-5b11-4d1a-9db1-89c76833af8b';
+    const otzmaFamily = families.find(f => f.family_name && f.family_name.includes('עוצמה'));
+    const OTZMA_GROUP_ID = otzmaFamily ? otzmaFamily.id : null;
+
+    const buckets = { nadlan: 0, dudi: 0, otzma: 0, private: 0 };
+    signed.forEach(s => {
+      if (!s.is_active) return;
+      const parcelMeta = parcelsMetaIdx[s.parcel];
+      const factor = parcelMeta?.participation_factor != null ? parseFloat(parcelMeta.participation_factor) : 1;
+      const stored = parseFloat(s.agreement_area) || parseFloat(s.unification_area) || 0;
+      const eff = stored * factor;
+
+      if (s.family_group_id === DUDI_GROUP_ID) {
+        buckets.dudi += eff;
+      } else if (s.family_group_id === NADLAN_GROUP_ID) {
+        buckets.nadlan += eff;
+      } else if (OTZMA_GROUP_ID && s.family_group_id === OTZMA_GROUP_ID) {
+        buckets.otzma += eff;
+      } else {
+        // כולל ארד/שירה/וזוב (חנן מור השקעות) + כל המשפחות הפרטיות + יחידים
+        buckets.private += eff;
+      }
+    });
+
+    const totalArea = buckets.nadlan + buckets.dudi + buckets.otzma + buckets.private;
+    const fmtDunam = m2 => (m2 / 1000).toLocaleString('he-IL', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+    const pct = m2 => totalArea > 0 ? ((m2 / totalArea) * 100).toFixed(1) : '0.0';
+
+    const setIf = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    setIf('four-buckets-total', fmtDunam(totalArea));
+    setIf('bucket-nadlan-value', fmtDunam(buckets.nadlan));
+    setIf('bucket-nadlan-pct', pct(buckets.nadlan) + ' %');
+    setIf('bucket-dudi-value', fmtDunam(buckets.dudi));
+    setIf('bucket-dudi-pct', pct(buckets.dudi) + ' %');
+    setIf('bucket-otzma-value', fmtDunam(buckets.otzma));
+    setIf('bucket-otzma-pct', pct(buckets.otzma) + ' %');
+    setIf('bucket-private-value', fmtDunam(buckets.private));
+    setIf('bucket-private-pct', pct(buckets.private) + ' %');
+    // ============================================================
 
     // קיבוץ כל הרשומות (visible + hidden) לפי id_number — שורה אחת לכל אדם
     // hiddenRecords מקבלים דגל is_partnership=true כדי שהפילטרים יוכלו לסנן בהתאם
