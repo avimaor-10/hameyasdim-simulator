@@ -1057,7 +1057,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
       <div>
         <h2 style="margin:0; font-size:1.2rem; color:#1e3a8a; display:flex; align-items:center; gap:8px;">
-          📊 סיכום שטח תחת ניהולנו <span style="font-size:0.75rem; background:#6366f1; color:#fff; padding:3px 8px; border-radius:6px; font-weight:500;">4 באקטים</span>
+          📊 סיכום שטח תחת ניהולנו <span style="font-size:0.75rem; background:#6366f1; color:#fff; padding:3px 8px; border-radius:6px; font-weight:500;">5 באקטים</span>
         </h2>
         <div style="font-size:0.82rem; color:#6b7280; margin-top:4px;">
           חלוקת השטח לאיחוד וחלוקה לפי קבוצות הקצאה (יעד: 330-350 דונם)
@@ -1083,7 +1083,17 @@
         <div style="font-size:0.82rem; color:#3b82f6; margin-top:6px; font-weight:600;" id="bucket-nadlan-pct">— %</div>
       </div>
 
-      <!-- באקט 2: קבוצת דודי יצחקי -->
+      <!-- באקט 2: עודפות שותפות נדל"ן נדל"ן קבוצת מור (כובע 2) -->
+      <div class="bucket-card" style="background:#fff; border:1px solid #ddd6fe; border-radius:8px; padding:14px; text-align:center; border-top:4px solid #7c3aed; transition:transform 0.15s;">
+        <div style="font-size:0.78rem; color:#6b7280; margin-bottom:6px;" title="שטח שנרכש מעבר ל-5% של השותפים בעסקאות נדלן נדלן. כולל: 731 מ׳ר חנן מור השקעות (ארד + שירה + 3 עסקאות) + 597 מ׳ר 4 חברות פרטיות (3 עסקאות חלקיות).">
+          🟣 עודפות שותפות נדל"ן נדל"ן קבוצת מור
+        </div>
+        <div style="font-size:1.5rem; font-weight:700; color:#7c3aed; line-height:1.1;" id="bucket-overflow-value">—</div>
+        <div style="font-size:0.72rem; color:#9ca3af; margin-top:4px;">דונם</div>
+        <div style="font-size:0.82rem; color:#7c3aed; margin-top:6px; font-weight:600;" id="bucket-overflow-pct">— %</div>
+      </div>
+
+      <!-- באקט 3: קבוצת דודי יצחקי -->
       <div class="bucket-card" style="background:#fff; border:1px solid #fde68a; border-radius:8px; padding:14px; text-align:center; border-top:4px solid #f59e0b; transition:transform 0.15s;">
         <div style="font-size:0.78rem; color:#6b7280; margin-bottom:6px;" title="עסקה #23 (דנקנר) + עסקה #24 (זייגרמן) — דודי יצחקי קנה ומכר לרוכשי יחידות">
           🟧 קבוצת דודי יצחקי
@@ -4285,20 +4295,24 @@
     };
 
     // ============================================================
-    // 📊 חישוב 4 הבאקטים (14/05/2026) — קלף סיכום שטח תחת ניהולנו
+    // 📊 חישוב 5 הבאקטים (14/05/2026) — קלף סיכום שטח תחת ניהולנו
     // ============================================================
     // הבאקטים:
-    //   1. נדל"ן נדל"ן  — family_id '50ee16ff-...' (4 חברות + 22 עסקאות)
-    //   2. דודי יצחקי   — family_id 'a990ed96-...' (עסקאות #23-24)
-    //   3. עוצמה        — family שכוללת "עוצמה" בשם (141 רוכשי יחידות)
-    //   4. חתומים פרטיים — כל השאר (משפחות + יחידים)
+    //   1. נדל"ן נדל"ן       — family_id '50ee16ff-...' (5% של כל עסקה + עסקאות מלאות)
+    //   2. עודפות שותפות    — חנן מור השקעות + 4 חברות פרטיות (רכישות > 5%, כובע 2)
+    //   3. דודי יצחקי        — family_id 'a990ed96-...' (עסקאות #23-24)
+    //   4. עוצמה             — family שכוללת "עוצמה" בשם (141 רוכשי יחידות)
+    //   5. חתומים פרטיים     — כל השאר (משפחות + יחידים, ללא ישויות חברה)
     // ============================================================
     const NADLAN_GROUP_ID = '50ee16ff-4025-479d-af57-9f56d0489305';
     const DUDI_GROUP_ID   = 'a990ed96-5b11-4d1a-9db1-89c76833af8b';
+    const HANAN_GROUP_ID  = '42687af3-4ee2-48f6-b1b7-5f74c4eae699'; // חנן מור השקעות (כובע 2)
+    const FOUR_COMPANIES_GROUP_ID = 'f116cce6-ddd8-47ca-acd2-a92a2daa1442'; // 4 חברות פרטיות (כובע 2)
+    const PARTNERSHIP_OVERFLOW_IDS = new Set([HANAN_GROUP_ID, FOUR_COMPANIES_GROUP_ID]);
     const otzmaFamily = families.find(f => f.family_name && f.family_name.includes('עוצמה'));
     const OTZMA_GROUP_ID = otzmaFamily ? otzmaFamily.id : null;
 
-    const buckets = { nadlan: 0, dudi: 0, otzma: 0, private: 0 };
+    const buckets = { nadlan: 0, overflow: 0, dudi: 0, otzma: 0, private: 0 };
 
     // שלב 1: signed_owners — עם תמיכה ב-unification_area override (הוכברג) + ניכוי deducted_by_deal
     signed.forEach(s => {
@@ -4319,6 +4333,8 @@
         buckets.nadlan += eff;
       } else if (OTZMA_GROUP_ID && s.family_group_id === OTZMA_GROUP_ID) {
         buckets.otzma += eff;
+      } else if (PARTNERSHIP_OVERFLOW_IDS.has(s.family_group_id)) {
+        buckets.overflow += eff;
       } else {
         buckets.private += eff;
       }
@@ -4327,7 +4343,8 @@
     // שלב 2: partnership_deals — להוסיף רק עסקאות שאינן מיוצגות ע"י signed_owners (buyers)
     // • DUDI ו-OTZMA כבר מיוצגות ע"י signed_owners (rוkхים) — דילוג
     // • NADLAN: 4 החברות אינן ב-signed_owners עם שטח → להוסיף את העסקאות
-    // • Private (חנן מור השקעות וכו'): העסקאות עצמאיות מ-ARD/שירה → להוסיף
+    // • OVERFLOW (חנן מור השקעות + 4 חברות פרטיות): עסקאות עודף → באקט נפרד
+    // • Private: רק שאר העסקאות (אם יש כאלה ללא קבוצה מזוהה)
     (allDeals || []).forEach(d => {
       if (!d.is_active) return;
       if (d.family_group_id === DUDI_GROUP_ID) return;
@@ -4340,13 +4357,15 @@
 
       if (d.family_group_id === NADLAN_GROUP_ID) {
         buckets.nadlan += eff;
+      } else if (PARTNERSHIP_OVERFLOW_IDS.has(d.family_group_id)) {
+        buckets.overflow += eff;
       } else {
-        // כל יתר העסקאות (חנן מור השקעות, וכו') → באקט פרטיים
+        // עסקאות יוצאות-דופן ללא שיוך → באקט פרטיים
         buckets.private += eff;
       }
     });
 
-    const totalArea = buckets.nadlan + buckets.dudi + buckets.otzma + buckets.private;
+    const totalArea = buckets.nadlan + buckets.overflow + buckets.dudi + buckets.otzma + buckets.private;
     const fmtDunam = m2 => (m2 / 1000).toLocaleString('he-IL', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
     const pct = m2 => totalArea > 0 ? ((m2 / totalArea) * 100).toFixed(1) : '0.0';
 
@@ -4357,6 +4376,8 @@
     setIf('four-buckets-total', fmtDunam(totalArea));
     setIf('bucket-nadlan-value', fmtDunam(buckets.nadlan));
     setIf('bucket-nadlan-pct', pct(buckets.nadlan) + ' %');
+    setIf('bucket-overflow-value', fmtDunam(buckets.overflow));
+    setIf('bucket-overflow-pct', pct(buckets.overflow) + ' %');
     setIf('bucket-dudi-value', fmtDunam(buckets.dudi));
     setIf('bucket-dudi-pct', pct(buckets.dudi) + ' %');
     setIf('bucket-otzma-value', fmtDunam(buckets.otzma));
