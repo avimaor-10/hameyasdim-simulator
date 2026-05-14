@@ -3778,6 +3778,8 @@
     if (search) {
       filtered = filtered.filter(f => (f.family_name || '').toLowerCase().includes(search));
     }
+    // מיון לפי שטח גדול → קטן (totalArea = שטח באיחוד וחלוקה אחרי מקדם השמאי)
+    filtered = [...filtered].sort((a, b) => (b.totalArea || 0) - (a.totalArea || 0));
 
     if (filtered.length === 0) {
       document.getElementById('families-list').innerHTML = `
