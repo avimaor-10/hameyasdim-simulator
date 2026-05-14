@@ -4299,12 +4299,19 @@
     const OTZMA_GROUP_ID = otzmaFamily ? otzmaFamily.id : null;
 
     const buckets = { nadlan: 0, dudi: 0, otzma: 0, private: 0 };
+
+    // שלב 1: signed_owners — עם תמיכה ב-unification_area override (הוכברג) + ניכוי deducted_by_deal
     signed.forEach(s => {
       if (!s.is_active) return;
       const parcelMeta = parcelsMetaIdx[s.parcel];
       const factor = parcelMeta?.participation_factor != null ? parseFloat(parcelMeta.participation_factor) : 1;
-      const stored = parseFloat(s.agreement_area) || parseFloat(s.unification_area) || 0;
-      const eff = stored * factor;
+      const agArea = parseFloat(s.agreement_area) || 0;
+      const unifArea = parseFloat(s.unification_area) || 0;
+      const deducted = parseFloat(s.deducted_by_deal) || 0;
+      const residual = Math.max(0, agArea - deducted);
+      // Override logic — אם unification_area שונה מ-agreement_area ואין ניכוי, להשתמש בו ישירות
+      const hasOverride = unifArea > 0 && Math.abs(unifArea - agArea) > 0.01 && deducted < 0.01;
+      const eff = hasOverride ? unifArea : residual * factor;
 
       if (s.family_group_id === DUDI_GROUP_ID) {
         buckets.dudi += eff;
@@ -4313,7 +4320,28 @@
       } else if (OTZMA_GROUP_ID && s.family_group_id === OTZMA_GROUP_ID) {
         buckets.otzma += eff;
       } else {
-        // כולל ארד/שירה/וזוב (חנן מור השקעות) + כל המשפחות הפרטיות + יחידים
+        buckets.private += eff;
+      }
+    });
+
+    // שלב 2: partnership_deals — להוסיף רק עסקאות שאינן מיוצגות ע"י signed_owners (buyers)
+    // • DUDI ו-OTZMA כבר מיוצגות ע"י signed_owners (rוkхים) — דילוג
+    // • NADLAN: 4 החברות אינן ב-signed_owners עם שטח → להוסיף את העסקאות
+    // • Private (חנן מור השקעות וכו'): העסקאות עצמאיות מ-ARD/שירה → להוסיף
+    (allDeals || []).forEach(d => {
+      if (!d.is_active) return;
+      if (d.family_group_id === DUDI_GROUP_ID) return;
+      if (OTZMA_GROUP_ID && d.family_group_id === OTZMA_GROUP_ID) return;
+
+      const parcelMeta = parcelsMetaIdx[d.parcel];
+      const baseFactor = parcelMeta?.participation_factor != null ? parseFloat(parcelMeta.participation_factor) : 1;
+      const factor = (d.override_factor != null && d.override_factor !== '') ? parseFloat(d.override_factor) : baseFactor;
+      const eff = (parseFloat(d.area_sqm) || 0) * factor;
+
+      if (d.family_group_id === NADLAN_GROUP_ID) {
+        buckets.nadlan += eff;
+      } else {
+        // כל יתר העסקאות (חנן מור השקעות, וכו') → באקט פרטיים
         buckets.private += eff;
       }
     });
