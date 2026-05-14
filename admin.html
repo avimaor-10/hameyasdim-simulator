@@ -1825,20 +1825,6 @@
   // צבע ברירת-מחדל לבעלים חתום בודד שלא בקבוצה (אדמין משבץ ידני)
   const SOLO_SIGNED_COLOR = '#64748b';  // אפור ניטרלי
 
-  // ============================================================
-  // איחוד 3 קבוצות נדל"ן-נדל"ן לתצוגה אחת בכרטיסי משפחה (14/05/2026)
-  // ------------------------------------------------------------
-  // 3 הקבוצות הן ישויות משפטיות נפרדות (כובע 2) אבל בצד הרוכש של
-  // 22 עסקאות נדל"ן-נדל"ן ב-13 חלקות מקור. הסכום הצפוי לפי האקסל:
-  // ~42,890 מ"ר = 42.9 דונם.
-  // ============================================================
-  const NADLAN_PARTNERSHIP_GROUP_IDS = [
-    '50ee16ff-4025-479d-af57-9f56d0489305', // רוכשי שותפות נדלן נדלן קבוצת מור (ראשי) ~36.0 דונם
-    'f116cce6-ddd8-47ca-acd2-a92a2daa1442', // קבוצת נדלן נדלן (4 חברות פרטיות) ~6.3 דונם
-    '42687af3-4ee2-48f6-b1b7-5f74c4eae699', // קבוצת חנן מור השקעות ~0.6 דונם
-  ];
-  const MAIN_NADLAN_GROUP_ID = NADLAN_PARTNERSHIP_GROUP_IDS[0];
-
   // בחירת הצבע הבא הזמין מהפלטה (לפי מה שכבר בשימוש)
   function pickNextFamilyColor(usedColors = []) {
     const used = new Set(usedColors.filter(Boolean));
@@ -3763,49 +3749,17 @@
       };
     });
 
-    // === איחוד 3 קבוצות נדל"ן-נדל"ן לכרטיס תצוגה אחד (14/05/2026) ===
-    // ראה הסבר ב-NADLAN_PARTNERSHIP_GROUP_IDS למעלה. נשמרים 3 הקבוצות ב-DB
-    // כישויות נפרדות; כאן רק התצוגה מוצגת כקבוצה אחת מאוחדת.
-    let displayFamilies = families;
-    const nadlanGroups = families.filter(f => NADLAN_PARTNERSHIP_GROUP_IDS.includes(f.id));
-    if (nadlanGroups.length > 1) {
-      const main = nadlanGroups.find(f => f.id === MAIN_NADLAN_GROUP_ID) || nadlanGroups[0];
-      const subgroupNames = nadlanGroups
-        .filter(f => f.id !== main.id)
-        .map(f => f.family_name)
-        .join(' + ');
-      const merged = {
-        ...main,
-        members: nadlanGroups.flatMap(f => f.members),
-        memberDeals: nadlanGroups.flatMap(f => f.memberDeals),
-        signersArea: nadlanGroups.reduce((s, f) => s + f.signersArea, 0),
-        dealsArea: nadlanGroups.reduce((s, f) => s + f.dealsArea, 0),
-        totalArea: nadlanGroups.reduce((s, f) => s + f.totalArea, 0),
-        totalAreaRegistered: nadlanGroups.reduce((s, f) => s + f.totalAreaRegistered, 0),
-        allocatedArea: nadlanGroups.reduce((s, f) => s + f.allocatedArea, 0),
-        // סימון ויזואלי: שם הקבוצה כולל "(מאחד)" + הערה מפורטת
-        family_name: main.family_name + ' (מאחד 3 ישויות)',
-        notes: (main.notes ? main.notes + ' · ' : '')
-             + `🔗 מאחד את 3 הקבוצות בצד-הרוכש של עסקאות נדל"ן-נדל"ן: ${main.family_name} + ${subgroupNames}.`
-             + ' הקבוצות הנפרדות נשמרות ב-DB כישויות עצמאיות (כובע 2).',
-      };
-      merged.remaining = merged.totalArea - merged.allocatedArea;
-      const idx = families.findIndex(f => f.id === MAIN_NADLAN_GROUP_ID);
-      displayFamilies = families.filter(f => !NADLAN_PARTNERSHIP_GROUP_IDS.includes(f.id));
-      displayFamilies.splice(Math.max(0, idx), 0, merged);
-    }
-
     // סטטיסטיקה
-    document.getElementById('stat-fam-total').textContent = displayFamilies.length;
-    const totalMembers = displayFamilies.reduce((s, f) => s + f.members.length + f.memberDeals.length, 0);
+    document.getElementById('stat-fam-total').textContent = families.length;
+    const totalMembers = families.reduce((s, f) => s + f.members.length + f.memberDeals.length, 0);
     document.getElementById('stat-fam-members').textContent = totalMembers;
-    const totalFamArea = displayFamilies.reduce((s, f) => s + f.totalArea, 0);
+    const totalFamArea = families.reduce((s, f) => s + f.totalArea, 0);
     document.getElementById('stat-fam-area').textContent = totalFamArea > 0 ? fmtSqm(totalFamArea) : '-';
     const orphanSigners = allSignedOwners.filter(s => !s.family_group_id).length;
     const orphanDeals = allDeals.filter(d => !d.family_group_id).length;
     document.getElementById('stat-fam-orphan').textContent = `${orphanSigners} + ${orphanDeals} עסק׳`;
 
-    renderFamilies(displayFamilies);
+    renderFamilies(families);
   }
 
   function renderFamilies(families) {
