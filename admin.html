@@ -5571,11 +5571,14 @@
         <button class="btn-export" onclick="window.saveSignedDetail('${d.id}')">💾 שמור שינויים</button>
       </div>
     `;
-    overlay.classList.add('active');
+    // 🐛 BUG FIX (15/05/2026): המודאל משתמש ב-class 'visible' (כמו שאר המודאלים)
+    // ולא 'active'. זה היה באג קיים שמנע פתיחת המודאל הפרטי לחלוטין —
+    // הקליק על "פרטים" לא הציג כלום למרות שהקוד רץ.
+    overlay.classList.add('visible');
   };
 
   window.closeSignedDetailModal = function() {
-    document.getElementById('signed-detail-modal').classList.remove('active');
+    document.getElementById('signed-detail-modal').classList.remove('visible');
   };
 
   window.saveSignedDetail = async function(signedId) {
