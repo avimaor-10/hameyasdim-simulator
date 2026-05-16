@@ -37,6 +37,20 @@ BEGIN;
 
 
 -- ============================================================
+-- צעד מקדים: הרחבת CHECK constraint לכלול 'needs_manual_check'
+-- ============================================================
+-- ה-constraint הישן (מסקריפט 09) מאפשר רק 'verified'/'not_verified'/'not_checked'.
+-- אנחנו רוצים להוסיף ערך 'needs_manual_check' כדי לסמן רשומות
+-- שדורשות בדיקה פיסית בקלסרים.
+ALTER TABLE public.signed_owners
+  DROP CONSTRAINT IF EXISTS signed_owners_master_2015_status_check;
+
+ALTER TABLE public.signed_owners
+  ADD CONSTRAINT signed_owners_master_2015_status_check
+  CHECK (master_2015_status IN ('verified', 'not_verified', 'not_checked', 'needs_manual_check'));
+
+
+-- ============================================================
 -- שאילתה 1: לפני - הרשומות שיתעדכנו
 -- ============================================================
 SELECT '📸 לפני 100' AS "שלב",
