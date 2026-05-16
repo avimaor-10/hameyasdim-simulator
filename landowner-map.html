@@ -866,6 +866,71 @@
     font-size: 0.88rem;
     opacity: 0.95;
   }
+
+  /* ===== Preferences Survey Panel ===== */
+  .preferences-card { margin-top: 28px; }
+  .preferences-intro {
+    background: rgba(201, 169, 97, 0.10);
+    border-right: 4px solid var(--accent);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    margin-bottom: 18px;
+    color: var(--text);
+  }
+  .preferences-list { display: flex; flex-direction: column; gap: 12px; }
+  .pref-item {
+    display: grid;
+    grid-template-columns: 40px 160px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f9fafb;
+    border-radius: 10px;
+    border: 1.5px solid #e5e7eb;
+    transition: all 0.2s;
+  }
+  .pref-item.filled {
+    background: linear-gradient(90deg, rgba(201, 169, 97, 0.18) 0%, rgba(201, 169, 97, 0.04) 100%);
+    border-color: var(--accent);
+    box-shadow: 0 2px 8px rgba(201, 169, 97, 0.12);
+  }
+  .pref-medal { font-size: 1.7rem; text-align: center; }
+  .pref-label { font-weight: 700; color: var(--text); font-size: 0.95rem; }
+  .pref-value { color: var(--text-muted); font-size: 0.95rem; }
+  .pref-value.selected { color: var(--primary); font-weight: 700; font-size: 1.02rem; }
+  .pref-remove {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    padding: 5px 12px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: inherit;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  .pref-remove:hover { background: #fecaca; }
+  .preferences-status {
+    margin-top: 14px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    text-align: center;
+    display: none;
+    font-weight: 600;
+  }
+  .preferences-status.success { display: block; background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+  .preferences-status.error { display: block; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+  .preferences-status.info { display: block; background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+
+  /* הדגשת מגרשים נבחרים במפה */
+  .lot-shape.pref-1 { fill: rgba(255, 215, 0, 0.55) !important; stroke: #b8860b !important; stroke-width: 0.4 !important; }
+  .lot-shape.pref-2 { fill: rgba(192, 192, 192, 0.55) !important; stroke: #708090 !important; stroke-width: 0.4 !important; }
+  .lot-shape.pref-3 { fill: rgba(205, 127, 50, 0.55) !important; stroke: #8b4513 !important; stroke-width: 0.4 !important; }
+  .lot-shape, .lot-number { cursor: pointer; }
 </style>
 
 <div class="userbar" id="userbar" style="display:none;">
@@ -880,7 +945,7 @@
 </div>
 
 <script type="module">
-  import { requireAuth, logout } from './supabase-config.js';
+  import { supabase, requireAuth, logout } from './supabase-config.js';
   const user = await requireAuth();
   if (!user) throw new Error('not authenticated');
 
@@ -888,8 +953,9 @@
   // אדמינים יראו כאן את אותה מפה כמו בעלי הקרקע — לתצוגה בלבד.
 
 
-  // חשיפת המשתמש לסקריפט הראשי
+  // חשיפת המשתמש וגישת Supabase לסקריפט הראשי (לסקר ההעדפות)
   window.__currentUser = user;
+  window.__supabase = supabase;
 
   // הצגת סרגל המשתמש
   const bar = document.getElementById('userbar');
@@ -966,6 +1032,44 @@
   </div>
 
 
+
+
+  <!-- ============================================== -->
+  <!-- PREFERENCES SURVEY - סקר העדפות מגרשים        -->
+  <!-- ============================================== -->
+  <div class="card preferences-card" id="preferences-card">
+    <div class="card-header">
+      <span class="icon">📋</span>
+      <h2>ההעדפות שלי לבחירת מגרש להקצאה</h2>
+    </div>
+    <div class="card-body">
+      <div class="preferences-intro">
+        💡 <strong>לחץ על מגרש במפה</strong> כדי לסמן אותו כהעדפה. תוכל לבחור עד 3 מגרשים בסדר עדיפות.
+        ההעדפות שלך נשמרות אוטומטית ויעזרו לנו לנסות לשבץ אותך קרוב ככל האפשר לבחירותיך.
+      </div>
+      <div class="preferences-list">
+        <div class="pref-item" id="pref-item-1">
+          <span class="pref-medal">🥇</span>
+          <span class="pref-label">בחירה ראשונה</span>
+          <span class="pref-value">— לא נבחר —</span>
+          <button class="pref-remove" data-priority="1" style="display:none;">✕ הסר</button>
+        </div>
+        <div class="pref-item" id="pref-item-2">
+          <span class="pref-medal">🥈</span>
+          <span class="pref-label">בחירה שנייה</span>
+          <span class="pref-value">— לא נבחר —</span>
+          <button class="pref-remove" data-priority="2" style="display:none;">✕ הסר</button>
+        </div>
+        <div class="pref-item" id="pref-item-3">
+          <span class="pref-medal">🥉</span>
+          <span class="pref-label">בחירה שלישית</span>
+          <span class="pref-value">— לא נבחר —</span>
+          <button class="pref-remove" data-priority="3" style="display:none;">✕ הסר</button>
+        </div>
+      </div>
+      <div class="preferences-status" id="preferences-status"></div>
+    </div>
+  </div>
 
 </main>
 
@@ -1373,14 +1477,17 @@
       }
       g.appendChild(text);
 
-      // אירועי tooltip על המספר (ללא בחירה)
+      // אירועי tooltip + בחירת העדפה על המספר
       text.addEventListener('mouseenter', (e) => showTooltip(lot, e));
       text.addEventListener('mousemove', (e) => moveTooltip(e));
       text.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
-      // אירועי tooltip על הפוליגון (ללא בחירה — תצוגה בלבד)
+      text.addEventListener('click', (e) => { e.stopPropagation(); togglePreference(lot.id); });
+
+      // אירועי tooltip + בחירת העדפה על הפוליגון
       poly.addEventListener('mouseenter', (e) => showTooltip(lot, e));
       poly.addEventListener('mousemove', (e) => moveTooltip(e));
       poly.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+      poly.addEventListener('click', () => togglePreference(lot.id));
 
       overlay.appendChild(g);
     });
@@ -2106,6 +2213,190 @@
   }
 
   // (האזנה ל-Enter בשדות הקלט הוחלפה בלוגיקה החכמה למעלה — Enter בגוש/חלקה עובר לשדה הבא, Enter בשטח גולל למפה)
+</script>
+
+
+<!-- ============================================================
+     מערכת בחירת העדפות מגרשים (סקר העדפות לבעלי קרקע)
+     ============================================================ -->
+<script>
+  // ===== State גלובלי של ההעדפות =====
+  let userPreferences = {}; // { 1: lotId, 2: lotId, 3: lotId }
+
+  // ===== עזר: ממתין ש-supabase ו-user יהיו מוכנים =====
+  async function waitForReady() {
+    let tries = 0;
+    while ((!window.__supabase || !window.__currentUser) && tries < 50) {
+      await new Promise(r => setTimeout(r, 100));
+      tries++;
+    }
+    return !!(window.__supabase && window.__currentUser);
+  }
+
+  // ===== טעינת העדפות קיימות =====
+  async function loadPreferences() {
+    const ready = await waitForReady();
+    if (!ready) {
+      console.error('Supabase/user not ready');
+      return;
+    }
+    const supabase = window.__supabase;
+    const { data, error } = await supabase
+      .from('landowner_preferences')
+      .select('lot_id, priority')
+      .order('priority');
+
+    if (error) {
+      console.error('Failed to load preferences:', error);
+      showPreferenceStatus('שגיאה בטעינת ההעדפות: ' + error.message, 'error');
+      return;
+    }
+
+    userPreferences = {};
+    if (data) data.forEach(p => { userPreferences[p.priority] = p.lot_id; });
+    renderPreferences();
+  }
+
+  // ===== עדכון UI לפי State הנוכחי =====
+  function renderPreferences() {
+    for (let p = 1; p <= 3; p++) {
+      const item = document.getElementById('pref-item-' + p);
+      if (!item) continue;
+      const valueEl = item.querySelector('.pref-value');
+      const removeBtn = item.querySelector('.pref-remove');
+      const lotId = userPreferences[p];
+
+      if (lotId) {
+        const lot = (typeof LOTS !== 'undefined') ? LOTS.find(l => l.id === lotId) : null;
+        valueEl.textContent = 'מגרש ' + lotId + (lot ? ' · ' + lot.use : '');
+        valueEl.classList.add('selected');
+        removeBtn.style.display = 'inline-block';
+        item.classList.add('filled');
+      } else {
+        valueEl.textContent = '— לא נבחר —';
+        valueEl.classList.remove('selected');
+        removeBtn.style.display = 'none';
+        item.classList.remove('filled');
+      }
+    }
+
+    // עדכון הדגשות במפה
+    document.querySelectorAll('.lot-shape').forEach(poly => {
+      poly.classList.remove('pref-1', 'pref-2', 'pref-3');
+    });
+    for (const [priority, lotId] of Object.entries(userPreferences)) {
+      const poly = document.getElementById('lot-polygon-' + lotId);
+      if (poly) poly.classList.add('pref-' + priority);
+    }
+  }
+
+  // ===== טוגל העדפה — מופעל בלחיצה על מגרש =====
+  async function togglePreference(lotId) {
+    const ready = await waitForReady();
+    if (!ready) {
+      showPreferenceStatus('שגיאה: לא נטען חיבור לשרת', 'error');
+      return;
+    }
+
+    const existingPriority = Object.keys(userPreferences).find(p => userPreferences[p] === lotId);
+
+    if (existingPriority) {
+      await removePreference(parseInt(existingPriority));
+    } else {
+      const nextPriority = [1, 2, 3].find(p => !userPreferences[p]);
+      if (!nextPriority) {
+        showPreferenceStatus('⚠ כבר בחרת 3 מגרשים. הסר אחד כדי לבחור מגרש חדש.', 'info');
+        return;
+      }
+      await addPreference(lotId, nextPriority);
+    }
+  }
+
+  // ===== הוספת העדפה =====
+  async function addPreference(lotId, priority) {
+    const supabase = window.__supabase;
+    const user = window.__currentUser;
+    showPreferenceStatus('שומר...', 'info');
+
+    const { error } = await supabase
+      .from('landowner_preferences')
+      .insert({ user_id: user.id, lot_id: lotId, priority: priority });
+
+    if (error) {
+      showPreferenceStatus('שגיאה בשמירה: ' + error.message, 'error');
+      return;
+    }
+
+    userPreferences[priority] = lotId;
+    renderPreferences();
+
+    const medal = priority === 1 ? '🥇' : (priority === 2 ? '🥈' : '🥉');
+    const priorityName = priority === 1 ? 'ראשונה' : (priority === 2 ? 'שנייה' : 'שלישית');
+    showPreferenceStatus(medal + ' נשמר! מגרש ' + lotId + ' נבחר כעדיפות ' + priorityName, 'success');
+  }
+
+  // ===== הסרת העדפה + קידום עדיפויות נמוכות יותר =====
+  async function removePreference(priority) {
+    const supabase = window.__supabase;
+    const user = window.__currentUser;
+    showPreferenceStatus('מסיר...', 'info');
+
+    // מחיקה ראשונית
+    const { error: delError } = await supabase
+      .from('landowner_preferences')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('priority', priority);
+
+    if (delError) {
+      showPreferenceStatus('שגיאה במחיקה: ' + delError.message, 'error');
+      return;
+    }
+    delete userPreferences[priority];
+
+    // קידום עדיפויות גבוהות יותר (אם 1 הוסר ויש 2/3 — לקדם אותן)
+    const toPromote = [];
+    for (let p = priority + 1; p <= 3; p++) {
+      if (userPreferences[p]) toPromote.push({ oldPriority: p, lotId: userPreferences[p] });
+    }
+    for (const { oldPriority, lotId } of toPromote) {
+      await supabase.from('landowner_preferences')
+        .delete().eq('user_id', user.id).eq('priority', oldPriority);
+      await supabase.from('landowner_preferences')
+        .insert({ user_id: user.id, lot_id: lotId, priority: oldPriority - 1 });
+      delete userPreferences[oldPriority];
+      userPreferences[oldPriority - 1] = lotId;
+    }
+
+    renderPreferences();
+    showPreferenceStatus('✓ ההעדפה הוסרה', 'success');
+  }
+
+  // ===== הצגת status =====
+  function showPreferenceStatus(msg, type) {
+    const el = document.getElementById('preferences-status');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'preferences-status ' + type;
+    if (type === 'success' || type === 'info') {
+      setTimeout(() => { el.className = 'preferences-status'; }, 3500);
+    }
+  }
+
+  // ===== Event listeners לכפתורי "הסר" =====
+  document.querySelectorAll('.pref-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const priority = parseInt(btn.dataset.priority);
+      removePreference(priority);
+    });
+  });
+
+  // ===== טעינה ראשונית — אחרי שהדף+המפה נטענים =====
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(loadPreferences, 300));
+  } else {
+    setTimeout(loadPreferences, 300);
+  }
 </script>
 
 <!-- ============================================================
