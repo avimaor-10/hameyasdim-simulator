@@ -2320,7 +2320,7 @@
 
     const { error } = await supabase
       .from('landowner_preferences')
-      .insert({ user_id: user.id, lot_id: lotId, priority: priority });
+      .insert({ user_id: user.profile.id, lot_id: lotId, priority: priority });
 
     if (error) {
       showPreferenceStatus('שגיאה בשמירה: ' + error.message, 'error');
@@ -2345,7 +2345,7 @@
     const { error: delError } = await supabase
       .from('landowner_preferences')
       .delete()
-      .eq('user_id', user.id)
+      .eq('user_id', user.profile.id)
       .eq('priority', priority);
 
     if (delError) {
@@ -2361,9 +2361,9 @@
     }
     for (const { oldPriority, lotId } of toPromote) {
       await supabase.from('landowner_preferences')
-        .delete().eq('user_id', user.id).eq('priority', oldPriority);
+        .delete().eq('user_id', user.profile.id).eq('priority', oldPriority);
       await supabase.from('landowner_preferences')
-        .insert({ user_id: user.id, lot_id: lotId, priority: oldPriority - 1 });
+        .insert({ user_id: user.profile.id, lot_id: lotId, priority: oldPriority - 1 });
       delete userPreferences[oldPriority];
       userPreferences[oldPriority - 1] = lotId;
     }
