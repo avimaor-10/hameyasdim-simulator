@@ -17,14 +17,14 @@ SELECT
   s.parcel                                  AS "חלקה",
   s.master_2015_status                      AS "סטטוס נוכחי",
   s.master_2015_notes                       AS "הערה מלאה",
-  s.inherited_from                          AS "יורש של (אם תועד)",
+  s.inherited_from_id_number                          AS "יורש של (אם תועד)",
   CASE
     WHEN s.master_2015_notes LIKE '%(לא חתם - דרך שרשור)%'
-     AND s.inherited_from IS NULL
+     AND s.inherited_from_id_number IS NULL
     THEN '⚠ אולי צריך not_verified'
 
     WHEN s.master_2015_notes LIKE '%(לא חתם - דרך שרשור)%'
-     AND s.inherited_from IS NOT NULL
+     AND s.inherited_from_id_number IS NOT NULL
     THEN '✅ verified (יורש מתועד)'
 
     WHEN s.master_2015_notes LIKE '%יורש%' OR s.master_2015_notes LIKE '%נכנס%בנעלי%'
