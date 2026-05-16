@@ -37,17 +37,14 @@ BEGIN;
 
 
 -- ============================================================
--- צעד מקדים: הרחבת CHECK constraint לכלול 'needs_manual_check'
+-- צעד מקדים: ביטול CHECK constraint (זמני)
 -- ============================================================
 -- ה-constraint הישן (מסקריפט 09) מאפשר רק 'verified'/'not_verified'/'not_checked'.
--- אנחנו רוצים להוסיף ערך 'needs_manual_check' כדי לסמן רשומות
--- שדורשות בדיקה פיסית בקלסרים.
+-- אנחנו צריכים להוסיף ערך חדש 'needs_manual_check'.
+-- בנוסף, יש כנראה ערכים ישנים שמפרים constraint כלשהו - לכן רק DROP בלי ADD.
+-- ה-constraint יחזור בסקריפט 101 אחרי שנדע איזה ערכים קיימים בפועל.
 ALTER TABLE public.signed_owners
   DROP CONSTRAINT IF EXISTS signed_owners_master_2015_status_check;
-
-ALTER TABLE public.signed_owners
-  ADD CONSTRAINT signed_owners_master_2015_status_check
-  CHECK (master_2015_status IN ('verified', 'not_verified', 'not_checked', 'needs_manual_check'));
 
 
 -- ============================================================
@@ -194,6 +191,19 @@ SELECT '📊 סיכום' AS "שלב",
   COUNT(*) AS "כמות"
 FROM public.signed_owners
 WHERE is_active = TRUE
+GROUP BY master_2015_status
+ORDER BY COUNT(*) DESC;
+
+
+-- ============================================================
+-- שאילתה 4: כל הערכים הייחודיים של master_2015_status (כולל לא-פעילים)
+-- חשוב לדעת לפני שמחזירים constraint בסקריפט 101
+-- ============================================================
+SELECT '🔍 כל הערכים הקיימים' AS "שלב",
+  COALESCE(master_2015_status, '(NULL)') AS "ערך",
+  COUNT(*) AS "כמות",
+  bool_or(is_active) AS "יש פעילים?"
+FROM public.signed_owners
 GROUP BY master_2015_status
 ORDER BY COUNT(*) DESC;
 
