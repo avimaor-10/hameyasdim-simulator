@@ -813,6 +813,7 @@
   <button class="tab-btn" data-tab="allocations">🎯 שיבוץ מגרשים</button>
   <button class="tab-btn" data-tab="families">👨‍👩‍👧 קבוצות להקצאה</button>
   <button class="tab-btn" data-tab="signed-list">📋 בעלי קרקע ומשפחות החתומות על הסכם הניהול</button>
+  <button class="tab-btn" data-tab="preferences">📊 העדפות בעלי קרקע</button>
 </nav>
 
 <!-- ============================================================ -->
@@ -1214,6 +1215,57 @@
   </div>
 </div>
 </div><!-- /tab-signed-list -->
+
+
+<!-- ============================================== -->
+<!-- TAB: PREFERENCES - העדפות בעלי קרקע            -->
+<!-- ============================================== -->
+<div class="tab-content" id="tab-preferences">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <h2 style="margin:0;">📊 העדפות בעלי קרקע לבחירת מגרשים</h2>
+    <div style="display:flex; gap:10px;">
+      <button id="prefs-refresh-btn" class="btn-secondary">🔄 רענן</button>
+      <button id="prefs-export-btn" class="btn-secondary">📥 ייצוא ל-CSV</button>
+    </div>
+  </div>
+
+  <!-- סטטיסטיקה כללית -->
+  <div id="prefs-stats" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:24px;"></div>
+
+  <!-- Heatmap של פופולריות מגרשים -->
+  <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:24px;">
+    <h3 style="margin:0 0 14px 0; font-size:1.05rem;">🔥 פופולריות מגרשים — כמה אנשים בחרו כל מגרש</h3>
+    <div id="prefs-heatmap" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(70px,1fr)); gap:8px;"></div>
+    <div style="margin-top:12px; font-size:0.85rem; color:var(--text-muted);">
+      <span style="display:inline-block; width:14px; height:14px; background:#fef3c7; border:1px solid #f59e0b; vertical-align:middle; margin-left:4px;"></span> 1-2 בחירות
+      <span style="display:inline-block; width:14px; height:14px; background:#fbbf24; border:1px solid #d97706; vertical-align:middle; margin:0 4px 0 10px;"></span> 3-5 בחירות
+      <span style="display:inline-block; width:14px; height:14px; background:#dc2626; border:1px solid #991b1b; vertical-align:middle; margin:0 4px 0 10px;"></span> 6+ בחירות
+    </div>
+  </div>
+
+  <!-- טבלת ההעדפות -->
+  <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:18px;">
+    <h3 style="margin:0 0 14px 0; font-size:1.05rem;">📋 פירוט העדפות לפי בעל קרקע</h3>
+    <div style="overflow-x:auto;">
+      <table id="prefs-table" class="data-table" style="width:100%; border-collapse:collapse; font-size:0.92rem;">
+        <thead>
+          <tr style="background:#f3f4f6; text-align:right;">
+            <th style="padding:10px; border-bottom:2px solid var(--border);">שם בעל הקרקע</th>
+            <th style="padding:10px; border-bottom:2px solid var(--border);">אימייל</th>
+            <th style="padding:10px; border-bottom:2px solid var(--border); text-align:center;">🥇 בחירה 1</th>
+            <th style="padding:10px; border-bottom:2px solid var(--border); text-align:center;">🥈 בחירה 2</th>
+            <th style="padding:10px; border-bottom:2px solid var(--border); text-align:center;">🥉 בחירה 3</th>
+            <th style="padding:10px; border-bottom:2px solid var(--border);">עודכן ב-</th>
+          </tr>
+        </thead>
+        <tbody id="prefs-tbody">
+          <tr><td colspan="6" style="padding:30px; text-align:center; color:var(--text-muted);">טוען...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /tab-preferences -->
+
 
 <!-- מודאל פרטי בעל קרקע (תצוגה ועריכה) -->
 <div class="modal-overlay" id="signed-detail-modal">
@@ -5688,6 +5740,168 @@
 
   // טעינה ראשונית
   await loadData();
+
+
+  // ============================================================
+  // טאב העדפות בעלי קרקע
+  // ============================================================
+  const LOT_USE_LABELS = {
+    1:'מגורים+תעסוקה', 2:'מגורים+תעסוקה', 3:'מגורים+תעסוקה', 4:'מגורים+תעסוקה',
+    5:'מגורים+תעסוקה', 6:'מגורים ד׳', 7:'מגורים ד׳', 8:'מגורים ד׳', 9:'מגורים ד׳',
+    10:'מגורים ד׳', 11:'מגורים ד׳', 12:'מגורים ד׳', 13:'מגורים ד׳', 14:'מגורים ד׳',
+    15:'מגורים ד׳', 16:'מגורים ד׳', 17:'מגורים ד׳', 18:'מגורים ד׳', 19:'מגורים ד׳',
+    20:'מגורים ד׳', 21:'מגורים ד׳', 22:'מגורים ד׳', 23:'מגורים ד׳', 24:'מגורים ד׳',
+    25:'מגורים ד׳', 26:'מגורים ד׳', 27:'מגורים ד׳', 28:'מגורים ד׳', 29:'מגורים ד׳',
+    30:'מגורים ד׳', 31:'מגורים ד׳', 32:'מגורים ד׳', 33:'מגורים ד׳', 34:'מגורים ד׳',
+    35:'מגורים ה׳', 36:'מגורים ה׳', 37:'מגורים ה׳', 38:'דיור להשכרה', 39:'דיור להשכרה'
+  };
+
+  async function loadPreferencesData() {
+    const tbody = document.getElementById('prefs-tbody');
+    const statsEl = document.getElementById('prefs-stats');
+    const heatmapEl = document.getElementById('prefs-heatmap');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:30px; text-align:center; color:var(--text-muted);">טוען...</td></tr>';
+
+    // טען את כל ההעדפות עם פרטי המשתמש
+    const { data: prefs, error: prefsErr } = await supabase
+      .from('landowner_preferences')
+      .select('user_id, lot_id, priority, updated_at')
+      .order('user_id, priority');
+
+    if (prefsErr) {
+      tbody.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color:#991b1b;">שגיאה בטעינה: ${prefsErr.message}</td></tr>`;
+      return;
+    }
+
+    // טען פרופילים
+    const { data: profiles, error: profErr } = await supabase
+      .from('profiles')
+      .select('id, full_name, email');
+
+    if (profErr) {
+      tbody.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color:#991b1b;">שגיאה בטעינת פרופילים: ${profErr.message}</td></tr>`;
+      return;
+    }
+
+    const profilesById = {};
+    profiles.forEach(p => { profilesById[p.id] = p; });
+
+    // קיבוץ העדפות לפי משתמש
+    const byUser = {};
+    prefs.forEach(pref => {
+      if (!byUser[pref.user_id]) byUser[pref.user_id] = { prefs: {}, lastUpdated: null };
+      byUser[pref.user_id].prefs[pref.priority] = pref.lot_id;
+      if (!byUser[pref.user_id].lastUpdated || pref.updated_at > byUser[pref.user_id].lastUpdated) {
+        byUser[pref.user_id].lastUpdated = pref.updated_at;
+      }
+    });
+
+    // ===== סטטיסטיקה כללית =====
+    const totalUsers = Object.keys(byUser).length;
+    const totalSelections = prefs.length;
+    const usersWithAllThree = Object.values(byUser).filter(u => u.prefs[1] && u.prefs[2] && u.prefs[3]).length;
+    const usersWithOnlyOne = Object.values(byUser).filter(u => u.prefs[1] && !u.prefs[2]).length;
+
+    statsEl.innerHTML = `
+      <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+        <div style="font-size:1.8rem; font-weight:700; color:var(--primary);">${totalUsers}</div>
+        <div style="font-size:0.85rem; color:var(--text-muted);">בעלי קרקע שדירגו</div>
+      </div>
+      <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+        <div style="font-size:1.8rem; font-weight:700; color:var(--success);">${totalSelections}</div>
+        <div style="font-size:0.85rem; color:var(--text-muted);">סה"כ העדפות</div>
+      </div>
+      <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+        <div style="font-size:1.8rem; font-weight:700; color:var(--accent);">${usersWithAllThree}</div>
+        <div style="font-size:0.85rem; color:var(--text-muted);">השלימו 3 בחירות</div>
+      </div>
+      <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+        <div style="font-size:1.8rem; font-weight:700; color:#f59e0b;">${usersWithOnlyOne}</div>
+        <div style="font-size:0.85rem; color:var(--text-muted);">בחרו רק 1</div>
+      </div>
+    `;
+
+    // ===== Heatmap של פופולריות =====
+    // ספירת כמה אנשים בחרו כל מגרש (בכל עדיפות)
+    const lotCounts = {};
+    for (let i = 1; i <= 39; i++) lotCounts[i] = { total: 0, p1: 0, p2: 0, p3: 0 };
+    prefs.forEach(pref => {
+      lotCounts[pref.lot_id].total++;
+      lotCounts[pref.lot_id]['p' + pref.priority]++;
+    });
+
+    heatmapEl.innerHTML = '';
+    for (let i = 1; i <= 39; i++) {
+      const c = lotCounts[i];
+      let bg = '#f9fafb', border = '#e5e7eb', textColor = '#9ca3af';
+      if (c.total >= 6) { bg = '#dc2626'; border = '#991b1b'; textColor = 'white'; }
+      else if (c.total >= 3) { bg = '#fbbf24'; border = '#d97706'; textColor = '#78350f'; }
+      else if (c.total >= 1) { bg = '#fef3c7'; border = '#f59e0b'; textColor = '#78350f'; }
+
+      const tooltip = c.total > 0 ? `🥇${c.p1} 🥈${c.p2} 🥉${c.p3}` : 'אף אחד לא בחר';
+      heatmapEl.innerHTML += `
+        <div style="background:${bg}; border:1.5px solid ${border}; border-radius:8px; padding:10px 4px; text-align:center; color:${textColor};" title="${tooltip}">
+          <div style="font-size:0.7rem; opacity:0.8;">מגרש</div>
+          <div style="font-size:1.2rem; font-weight:700;">${i}</div>
+          <div style="font-size:0.8rem; font-weight:600;">${c.total > 0 ? c.total : '—'}</div>
+        </div>
+      `;
+    }
+
+    // ===== טבלת ההעדפות =====
+    const userRows = Object.entries(byUser).map(([userId, data]) => {
+      const profile = profilesById[userId] || { full_name: '(לא זוהה)', email: '—' };
+      const lot1 = data.prefs[1] ? `מגרש ${data.prefs[1]}<br><small>${LOT_USE_LABELS[data.prefs[1]] || ''}</small>` : '—';
+      const lot2 = data.prefs[2] ? `מגרש ${data.prefs[2]}<br><small>${LOT_USE_LABELS[data.prefs[2]] || ''}</small>` : '—';
+      const lot3 = data.prefs[3] ? `מגרש ${data.prefs[3]}<br><small>${LOT_USE_LABELS[data.prefs[3]] || ''}</small>` : '—';
+      const updatedDate = data.lastUpdated ? new Date(data.lastUpdated).toLocaleDateString('he-IL') + ' ' + new Date(data.lastUpdated).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '—';
+      return { name: profile.full_name, email: profile.email, lot1, lot2, lot3, updatedDate, lastUpdated: data.lastUpdated };
+    }).sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''));
+
+    if (userRows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:30px; text-align:center; color:var(--text-muted);">עדיין אין בעלי קרקע שדירגו העדפות.</td></tr>';
+    } else {
+      tbody.innerHTML = userRows.map(row => `
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:10px; font-weight:600;">${row.name}</td>
+          <td style="padding:10px; font-size:0.85rem; color:var(--text-muted);">${row.email}</td>
+          <td style="padding:10px; text-align:center;">${row.lot1}</td>
+          <td style="padding:10px; text-align:center;">${row.lot2}</td>
+          <td style="padding:10px; text-align:center;">${row.lot3}</td>
+          <td style="padding:10px; font-size:0.85rem; color:var(--text-muted);">${row.updatedDate}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  // ייצוא CSV
+  function exportPreferencesCSV() {
+    const rows = document.querySelectorAll('#prefs-tbody tr');
+    if (rows.length === 0 || rows[0].cells.length < 6) {
+      alert('אין נתונים לייצוא');
+      return;
+    }
+    const headers = ['שם', 'אימייל', 'בחירה 1', 'בחירה 2', 'בחירה 3', 'עודכן'];
+    const lines = [headers.join(',')];
+    rows.forEach(tr => {
+      const cells = Array.from(tr.cells).map(c => '"' + (c.innerText || '').replace(/\n/g, ' ').replace(/"/g, '""') + '"');
+      lines.push(cells.join(','));
+    });
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `landowner_preferences_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // טעינה כשעוברים ל-tab
+  document.querySelector('.tab-btn[data-tab="preferences"]')?.addEventListener('click', loadPreferencesData);
+  document.getElementById('prefs-refresh-btn')?.addEventListener('click', loadPreferencesData);
+  document.getElementById('prefs-export-btn')?.addEventListener('click', exportPreferencesCSV);
 </script>
 
 </body>
