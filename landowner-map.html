@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>סימולטור עסקת קומבינציה ושיתוף | מתחם המייסדים – נס ציונה</title>
+<title>מפת המגרשים וזכויות הבניה | רובע המייסדים</title>
 <style>
   :root {
     --primary: #1a3a5c;
@@ -884,12 +884,9 @@
   const user = await requireAuth();
   if (!user) throw new Error('not authenticated');
 
-  // אם המשתמש אינו אדמין — להפנות למפת המגרשים וזכויות הבניה (צפייה בלבד).
-  // הסימולטור משמש כעת ככלי אדמין בלבד (לאזור הניהול הפנימי).
-  if (user.profile.role !== 'admin') {
-    window.location.href = 'landowner-map.html';
-    throw new Error('redirecting to landowner map');
-  }
+  // עמוד זה זמין לכל משתמש מאושר (אדמין ובעלי קרקע כאחד).
+  // אדמינים יראו כאן את אותה מפה כמו בעלי הקרקע — לתצוגה בלבד.
+
 
   // חשיפת המשתמש לסקריפט הראשי
   window.__currentUser = user;
@@ -912,54 +909,12 @@
 </div>
 
 <header>
-  <h1>סימולטור עסקת קומבינציה ושיתוף</h1>
+  <h1>מפת המגרשים וזכויות הבניה</h1>
   <div class="subtitle">מתחם המייסדים, נס ציונה | תמ"ל 3010</div>
-  <div class="tagline">קבוצת חנן מור | אזור אישי לבעלי קרקע</div>
+  <div class="tagline">אזור אישי לבעלי קרקע · קבוצת חנן מור</div>
 </header>
 
 <main>
-
-  <!-- ============================================== -->
-  <!-- 4. INPUT CARD                                  -->
-  <!-- ============================================== -->
-  <div class="card">
-    <div class="card-header">
-      <span class="icon">📝</span>
-      <h2>פרטי החלקה שלך</h2>
-    </div>
-    <div class="card-body">
-      <div class="input-grid">
-        <div class="field">
-          <label for="block">גוש</label>
-          <input type="text" id="block" value="3852" />
-        </div>
-        <div class="field">
-          <label for="parcel">מספר חלקה</label>
-          <input type="number" id="parcel" placeholder="בחר מהרשימה" list="parcels-datalist" />
-          <datalist id="parcels-datalist"></datalist>
-        </div>
-        <div class="field">
-          <label for="area">שטח החלק שלך (מ"ר)</label>
-          <input type="number" id="area" placeholder="לדוגמה: 5000" />
-        </div>
-        <div class="field">
-          <button class="primary" id="calculate-btn" onclick="calculate()">חשב</button>
-        </div>
-      </div>
-      <div class="status-row">
-        <label class="checkbox-label">
-          <input type="checkbox" id="signed-with-mor" />
-          <span>אני כבר חתום על עסקת קומבינציה עם קבוצת חנן מור</span>
-        </label>
-      </div>
-
-      <!-- מידע על החלקה הנבחרת מתוך דו"ח השמאי -->
-      <div id="parcel-info" style="display:none; margin-top:14px; padding:14px 18px; border-radius:10px; font-size:0.92rem; line-height:1.7;"></div>
-
-      <!-- סטטוס שלבי הזרימה -->
-      <div id="step-status" class="step-status"></div>
-    </div>
-  </div>
 
   <!-- ============================================== -->
   <!-- 3. INTERACTIVE LOT MAP - תמיד גלויה            -->
@@ -967,11 +922,11 @@
   <div class="card" id="map-card">
     <div class="card-header">
       <span class="icon">🗺️</span>
-      <h2>מפת תאי השטח הסחירים — בחר את המגרש שלך</h2>
+      <h2>מפת המגרשים וזכויות הבניה</h2>
     </div>
     <div class="card-body">
       <p class="map-instruction">
-        🖱️ <strong>העבר את העכבר</strong> מעל מגרש לראות את הנתונים שלו · <strong>לחץ עליו</strong> כדי לבחור אותו לעסקת הקומבינציה.
+        🖱️ <strong>העבר את העכבר</strong> מעל מגרש כדי לראות את זכויות הבנייה ופרטי המגרש.
       </p>
 
       <div class="real-map-container" id="real-map-container">
@@ -1010,254 +965,6 @@
     </div>
   </div>
 
-  <!-- EMPTY STATE -->
-  <div class="card" id="empty-state">
-    <div class="empty-state">
-      <div class="emoji">📊</div>
-      <p>הזן את פרטי החלקה שלך למעלה כדי לראות את הסימולציה האישית שלך</p>
-    </div>
-  </div>
-
-  <!-- ============================================== -->
-  <!-- RESULTS                                        -->
-  <!-- ============================================== -->
-  <div class="results" id="results">
-
-    <!-- 3-step journey visual -->
-    <div class="journey-visual">
-      <div class="journey-card today">
-        <div>
-          <div class="journey-icon">🌾</div>
-          <div class="journey-step-label">שלב 1 · החלקה שלך היום</div>
-          <div class="journey-title" id="parcel-display">חלקה — | חקלאית</div>
-        </div>
-        <div>
-          <div class="journey-value" id="incoming-value">₪0</div>
-          <div class="journey-sub" id="incoming-percent">— מהשווי במצב הנכנס</div>
-          <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px; font-style:italic;">* ע"פ דו"ח שמאי האיחוד וחלוקה</div>
-        </div>
-      </div>
-
-      <div class="arrow-step">←</div>
-
-      <div class="journey-card future">
-        <div>
-          <div class="journey-icon">🏗️</div>
-          <div class="journey-step-label">שלב 2 · תא השטח שנבחר</div>
-          <div class="journey-title" id="selected-lot-display">— בחר מגרש —</div>
-        </div>
-        <div>
-          <div class="journey-value" id="outgoing-value">₪0</div>
-          <div class="multiplier-badge" id="multiplier-badge" style="display:none;">×0</div>
-          <div class="journey-sub" id="outgoing-percent">— מהשווי במצב היוצא</div>
-          <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px; font-style:italic;">* ע"פ דו"ח שמאי האיחוד וחלוקה</div>
-        </div>
-      </div>
-
-      <div class="arrow-step">←</div>
-
-      <div class="journey-card combination">
-        <div>
-          <div class="journey-icon">🏠</div>
-          <div class="journey-step-label">שלב 3 · חלקך במגרש</div>
-          <div class="journey-title" id="lot-share-percent">— מהמגרש</div>
-        </div>
-        <div>
-          <div class="journey-value" id="owner-share-value">₪0</div>
-          <div class="journey-sub" id="owner-units-count">— יח"ק לדירה</div>
-          <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px; font-style:italic;">* ע"פ דו"ח שמאי האיחוד וחלוקה</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- PARTNERSHIP -->
-    <div class="card" id="partnership-card" style="display:none;">
-      <div class="card-header">
-        <span class="icon">🤝</span>
-        <h2>הסכם השיתוף — חלוקת המגרש בין השותפים</h2>
-      </div>
-      <div class="card-body">
-        <div class="partnership-svg-container">
-          <svg class="partnership-svg" id="partnership-svg" viewBox="0 0 800 160" xmlns="http://www.w3.org/2000/svg">
-            <!-- Filled dynamically by JS -->
-          </svg>
-          <!-- מקרא ב-HTML (במקום SVG) — נצמד לפלייאוט RTL ולא דולף -->
-          <div class="partnership-legend">
-            <div class="pl-item"><span class="pl-swatch" style="background:#1a3a5c"></span>השטח החקלאי שלך</div>
-            <div class="pl-item"><span class="pl-swatch" style="background:#c9a961"></span>חקלאי ממצטרפים נוספים</div>
-          </div>
-        </div>
-
-        <div class="partnership-stats">
-          <div class="ps-card you">
-            <div class="ps-icon">👤</div>
-            <div class="ps-num" id="your-area-display">0 מ"ר</div>
-            <div class="ps-lbl">השטח שלך</div>
-            <div class="ps-num" style="font-size:1rem; margin-top:6px;" id="your-share-display">— %</div>
-          </div>
-          <div class="ps-card partners">
-            <div class="ps-icon">👥</div>
-            <div class="ps-num" id="additional-area-display">0 מ"ר</div>
-            <div class="ps-lbl">חסר ממצטרפים</div>
-            <div class="ps-num" style="font-size:1rem; margin-top:6px;" id="partners-share-display">— %</div>
-          </div>
-          <div class="ps-card total">
-            <div class="ps-icon">📐</div>
-            <div class="ps-num" id="required-area-display">0 מ"ר</div>
-            <div class="ps-lbl">סה"כ נדרש</div>
-            <div class="ps-num" style="font-size:1rem; margin-top:6px;">למגרש שלם</div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- (כרטיס "הזכויות שלך במגרש" הוסר — הנתונים מופיעים בשלב 3 למעלה ובכרטיס המגרש) -->
-
-    <!-- COMBINATION -->
-    <div class="card" id="combination-card" style="display:none;">
-      <div class="card-header">
-        <span class="icon">🏗️</span>
-        <h2>עסקת הקומבינציה עם קבוצת חנן מור</h2>
-      </div>
-      <div class="card-body">
-
-        <div class="fixed-rate-box">
-          <div class="fixed-rate-label">עסקת קומבינציה — סביב</div>
-          <div class="fixed-rate-value">~40%</div>
-          <div class="fixed-rate-sub">לבעל הקרקע · ייקבע סופית בדו"ח האפס בעת היתר הבנייה</div>
-        </div>
-
-        <div style="background:linear-gradient(135deg,#e6f0ff 0%,#fefbf3 100%); border:2px solid var(--primary-light); border-radius:12px; padding:20px 24px; margin-bottom:20px;">
-          <div style="font-weight:700; color:var(--primary); margin-bottom:14px; font-size:1.05rem;">📐 איך נקבעת העסקה — בקצרה</div>
-
-          <div style="font-size:0.95rem; line-height:1.85; color:#1f2937;">
-            <p style="margin-bottom:12px;">
-              אחוז הקומבינציה לבעל הקרקע <strong>ייקבע בעת הוצאת היתר הבנייה</strong>, על בסיס:
-            </p>
-            <ul style="margin:0 22px 12px 0; padding:0; list-style:none;">
-              <li style="padding:6px 0;">📊 <strong>רווח יזמי מקובל של 18%</strong> — זהו הסטנדרט המקובל בענף הנדל"ן לפרויקטים מסוג זה.</li>
-              <li style="padding:6px 0;">🏘️ <strong>נתוני שוק הנדל"ן באותה עת</strong> — שווי דירות חדשות למ"ר, ביקושים, מחירי קבלן.</li>
-              <li style="padding:6px 0;">🏗️ <strong>עלויות בנייה ופיתוח באותה עת</strong> — חומרים, עבודה, היטלים, אגרות, מימון.</li>
-            </ul>
-            <p style="margin-bottom:0;">
-              לאור הנתונים הידועים היום — אחוז הקומבינציה צפוי להיות <strong style="color:var(--success);">סביב ה-40%</strong>. אם שוק הנדל"ן יתחזק / עלויות יקטנו → האחוז יגדל. אם להפך → יקטן.
-            </p>
-          </div>
-
-          <div style="margin-top:18px; padding:14px 18px; background:linear-gradient(135deg,#1a3a5c 0%,#2c5f94 100%); color:white; border-radius:10px; display:flex; align-items:center; gap:14px;">
-            <div style="font-size:2.6rem; font-weight:900; color:#fde047; line-height:1;">18%</div>
-            <div style="flex:1;">
-              <div style="font-weight:700; font-size:1rem; margin-bottom:4px;">רווח יזמי מקובל בענף</div>
-              <div style="font-size:0.88rem; opacity:0.95; line-height:1.6;">
-                רווח קבוצת חנן מור עומד על 18% — הרמה המקובלת בענף לפרויקטים מסוג זה. כל יתר המשתנים (עלויות, שווי דירה, היטלים) ישתנו לפי המצב בשוק בזמן הוצאת ההיתר.
-              </div>
-            </div>
-          </div>
-
-          <div style="margin-top:14px; padding:12px 14px; background:#fef3c7; border-right:4px solid var(--warning); border-radius:6px; font-size:0.9rem; color:#78350f; line-height:1.7;">
-            💰 <strong>מיסוי:</strong> כל אחד מהצדדים משלם את המיסים שלו בעצמו —
-            בעל הקרקע: מס שבח + היטל השבחה + מע"מ על שירותי בנייה + מס מטרו.
-            קבוצת חנן מור: מס רכישה על חלק הקרקע שמקבלת בקומבינציה + מס חברות על הרווח שלה.
-          </div>
-        </div>
-
-        <div class="fairness-box">
-          <div class="fairness-title">🛡️ למה המבנה הזה הוגן לשני הצדדים</div>
-          <div class="fairness-grid">
-            <div class="fairness-item"><span class="fi-icon">✓</span> רווח יזמי מקובל של 18% — הסטנדרט בענף הנדל"ן</div>
-            <div class="fairness-item"><span class="fi-icon">✓</span> שקיפות מלאה — דו"ח אפס לעיון בעלי הקרקע</div>
-            <div class="fairness-item"><span class="fi-icon">✓</span> אם שווי הדירות יעלה — ההפרש לטובת בעל הקרקע</div>
-          </div>
-        </div>
-
-        <div class="benefits-grid">
-          <div class="benefit-card">
-            <span class="benefit-icon">⏰</span>
-            <div class="benefit-title">דחיית דמי ייזום</div>
-            <div class="benefit-desc">דמי הייזום נדחים ממועד אישור התוכנית למועד היתר הבנייה — בעל הקרקע <strong>לא משלם מכיסו</strong>.</div>
-          </div>
-          <div class="benefit-card">
-            <span class="benefit-icon">🏦</span>
-            <div class="benefit-title">מימון מחשבון הליווי</div>
-            <div class="benefit-desc">דמי הייזום משולמים <strong>מתוך חשבון הליווי הבנקאי</strong> של הפרויקט — חלק מתשומות הבנייה בדו"ח האפס.</div>
-          </div>
-          <div class="benefit-card">
-            <span class="benefit-icon">🤝</span>
-            <div class="benefit-title">תנאים שוויוניים</div>
-            <div class="benefit-desc">כל מצטרפי הסכם השיתוף חותמים על <strong>אותם תנאים בדיוק</strong> — שקיפות מלאה.</div>
-          </div>
-        </div>
-
-        <div class="mini-stat">
-          <span>יחידות קרקע שלך במגרשים (חלקך — בעלות + השכרה)</span>
-          <span class="val" id="lot-owner-units-full">—</span>
-        </div>
-        <div class="mini-stat">
-          <span>מתוכן — יחידות נטו שלך אחרי קומבינציה (~40% משוער)</span>
-          <span class="val" style="color: var(--success); font-size:1.1rem;" id="owner-units">—</span>
-        </div>
-        <div class="mini-stat">
-          <span>שווי דירת בעלות ממוצעת גמורה (94 מ"ר × ₪33,500)</span>
-          <span class="val" id="avg-apt-value">₪3,149,000</span>
-        </div>
-        <div class="mini-stat">
-          <span>שווי יח"ד השכרה ארוכת טווח גמורה (94 מ"ר × ₪15,000)</span>
-          <span class="val">₪1,410,000</span>
-        </div>
-
-        <!-- רצועות ירוקות — דירות גמורות בקומבינציה לכל מגרש בנפרד -->
-        <div id="per-lot-combination-strips" style="margin-top:18px;"></div>
-
-        <div class="final-value-box">
-          <div class="final-value-label">שווי לבעל הקרקע (ברוטו, כגמור)</div>
-
-          <!-- שני תת-סיכומים: דירות בעלות + יח"ד השכרה -->
-          <div id="value-breakdown-boxes" style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0 18px 0;">
-            <div id="ownership-summary-box" style="display:none; background:rgba(45,122,62,0.35); border:2px solid rgba(255,255,255,0.45); border-radius:12px; padding:16px 14px; text-align:center;">
-              <div style="font-size:2.2rem; line-height:1;">🏠</div>
-              <div style="font-size:0.88rem; opacity:0.95; margin-top:6px; font-weight:600;">דירות בעלות</div>
-              <div id="ownership-units-display" style="font-size:1.45rem; font-weight:800; margin-top:8px; line-height:1.1;">—</div>
-              <div id="ownership-value-display" style="font-size:1.1rem; opacity:0.95; margin-top:4px;">₪0</div>
-            </div>
-            <div id="rental-summary-box" style="display:none; background:rgba(8,145,178,0.4); border:2px solid rgba(255,255,255,0.45); border-radius:12px; padding:16px 14px; text-align:center;">
-              <div style="font-size:2.2rem; line-height:1;">🔑</div>
-              <div style="font-size:0.88rem; opacity:0.95; margin-top:6px; font-weight:600;">יח"ד השכרה ארוכת טווח</div>
-              <div id="rental-units-display" style="font-size:1.45rem; font-weight:800; margin-top:8px; line-height:1.1;">—</div>
-              <div id="rental-value-display" style="font-size:1.1rem; opacity:0.95; margin-top:4px;">₪0</div>
-            </div>
-          </div>
-
-          <!-- סה"כ -->
-          <div style="border-top:2px solid rgba(255,255,255,0.4); padding-top:14px;">
-            <div class="final-value-label" style="font-size:1rem; opacity:0.95;">💰 סה"כ שווי ברוטו</div>
-            <div class="final-value-num" id="owner-total-value">₪0</div>
-            <div class="final-value-sub">לפני מס שבח, היטל השבחה, מע"מ על שירותי בנייה ומס מטרו</div>
-          </div>
-
-          <div class="save-btn-wrapper">
-            <button class="save-btn" id="save-selection-btn">💾 שמור את הבחירה שלי</button>
-            <div class="save-status" id="save-status"></div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- DISCLAIMERS -->
-    <div class="disclaimers">
-      <h3>⚠️ הבהרות חשובות</h3>
-      <ul>
-        <li><strong>היקף הזכויות עשוי להשתנות:</strong> הנתונים מבוססים על מסמכי התוכנית שפורסמו ב-3/2026. עם אישור התוכנית הסופי, היקף הזכויות בכל מגרש יכול להשתנות.</li>
-        <li><strong>אחוז קומבינציה סביב ה-40% — הערכה נוכחית:</strong> ייקבע סופית בדו"ח האפס בעת הוצאת היתר הבנייה, על בסיס רווח יזמי מקובל של 18% + נתוני שוק הנדל"ן ועלויות הבנייה והפיתוח באותה עת. כל אחד מהצדדים משלם את המיסים שלו בעצמו (בעל הקרקע: מס שבח, היטל השבחה, מע"מ על שירותי בנייה, מס מטרו).</li>
-        <li>בחירת המגרש בשלב זה היא <strong>היפותטית</strong>. המיפוי הסופי של חלקות המקור למגרשי התמורה ייקבע ע"י שמאי התוכנית בהתאם לעקרונות השמאות (הלכת אירני, סע' 122 לחוק).</li>
-        <li>החישוב מבוסס על נספח עקרונות איחוד וחלוקה מ-01/03/2026 ועל הסימולטור הכלכלי מ-11/03/2026.</li>
-        <li>התמורה אינה כוללת ניכויי מס שבח, היטל השבחה, מע"מ על שירותי בנייה ומס מטרו — יחושבו בנפרד.</li>
-        <li>אין לראות בסימולטור זה הצעה מחייבת, חוות דעת שמאית או ייעוץ משפטי.</li>
-      </ul>
-    </div>
-
-  </div>
 
 
 </main>
@@ -1666,20 +1373,14 @@
       }
       g.appendChild(text);
 
-      // אירועי tooltip + בחירה על המספר
+      // אירועי tooltip על המספר (ללא בחירה)
       text.addEventListener('mouseenter', (e) => showTooltip(lot, e));
       text.addEventListener('mousemove', (e) => moveTooltip(e));
       text.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
-      text.addEventListener('click', (e) => {
-        e.stopPropagation();
-        selectLotById(lot.id);
-      });
-
-      // אירועי tooltip + בחירה על הפוליגון
+      // אירועי tooltip על הפוליגון (ללא בחירה — תצוגה בלבד)
       poly.addEventListener('mouseenter', (e) => showTooltip(lot, e));
       poly.addEventListener('mousemove', (e) => moveTooltip(e));
       poly.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
-      poly.addEventListener('click', () => selectLotById(lot.id));
 
       overlay.appendChild(g);
     });

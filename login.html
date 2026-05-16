@@ -212,7 +212,7 @@
     let targetUrl;
     if (currentUser.profile.approval_status !== 'approved') targetUrl = 'pending.html';
     else if (currentUser.profile.role === 'admin') targetUrl = 'admin.html';
-    else targetUrl = 'index.html';
+    else targetUrl = 'landowner-map.html';
 
     // הצג את מסך הביניים, הסתר את טופס הכניסה
     alreadyBox.style.display = 'block';
@@ -275,8 +275,8 @@
     } else if (profile.role === 'admin') {
       window.location.href = 'admin.html';
     } else {
-      // בעל קרקע מאושר → אזור אישי (צפייה בלבד)
-      window.location.href = 'client-portal.html';
+      // בעל קרקע מאושר → מפת המגרשים וזכויות הבניה (תצוגה בלבד)
+      window.location.href = 'landowner-map.html';
     }
   });
 
