@@ -1059,7 +1059,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
       <div>
         <h2 style="margin:0; font-size:1.2rem; color:#1e3a8a; display:flex; align-items:center; gap:8px;">
-          📊 סיכום שטח תחת ניהולנו <span style="font-size:0.75rem; background:#6366f1; color:#fff; padding:3px 8px; border-radius:6px; font-weight:500;">5 באקטים</span>
+          📊 סיכום שטח תחת ניהולנו <span style="font-size:0.75rem; background:#6366f1; color:#fff; padding:3px 8px; border-radius:6px; font-weight:500;">6 באקטים</span>
         </h2>
         <div style="font-size:0.82rem; color:#6b7280; margin-top:4px;">
           חלוקת השטח לאיחוד וחלוקה לפי קבוצות הקצאה (יעד: 330-350 דונם)
@@ -1115,14 +1115,24 @@
         <div style="font-size:0.82rem; color:#ec4899; margin-top:6px; font-weight:600;" id="bucket-otzma-pct">— %</div>
       </div>
 
-      <!-- באקט 4: חתומים פרטיים -->
-      <div class="bucket-card" style="background:#fff; border:1px solid #bbf7d0; border-radius:8px; padding:14px; text-align:center; border-top:4px solid #10b981; transition:transform 0.15s;">
-        <div style="font-size:0.78rem; color:#6b7280; margin-bottom:6px;" title="כל המשפחות והיחידים החתומים על הסכם הניהול 2015 — הכי גדול מבין הבאקטים">
-          🟩 חתומים פרטיים (משפחות+יחידים)
+      <!-- באקט 5: חתומים פרטיים — בבוררות (הרצוג) -->
+      <div class="bucket-card" style="background:#fff; border:1px solid #fde047; border-radius:8px; padding:14px; text-align:center; border-top:4px solid #ca8a04; transition:transform 0.15s;">
+        <div style="font-size:0.78rem; color:#6b7280; margin-bottom:6px;" title="חתומים פרטיים שמיוצגים על ידי משרד הרצוג ונמצאים בבוררות איתנו על תוקף הסכם הניהול. עמדתנו: ההסכם תקף.">
+          🟨 חתומים פרטיים — בבוררות (הרצוג)
         </div>
-        <div style="font-size:1.5rem; font-weight:700; color:#10b981; line-height:1.1;" id="bucket-private-value">—</div>
+        <div style="font-size:1.5rem; font-weight:700; color:#ca8a04; line-height:1.1;" id="bucket-arbitration-value">—</div>
         <div style="font-size:0.72rem; color:#9ca3af; margin-top:4px;">דונם</div>
-        <div style="font-size:0.82rem; color:#10b981; margin-top:6px; font-weight:600;" id="bucket-private-pct">— %</div>
+        <div style="font-size:0.82rem; color:#ca8a04; margin-top:6px; font-weight:600;" id="bucket-arbitration-pct">— %</div>
+      </div>
+
+      <!-- באקט 6: חתומים פרטיים — לא בבוררות -->
+      <div class="bucket-card" style="background:#fff; border:1px solid #bbf7d0; border-radius:8px; padding:14px; text-align:center; border-top:4px solid #10b981; transition:transform 0.15s;">
+        <div style="font-size:0.78rem; color:#6b7280; margin-bottom:6px;" title="חתומים פרטיים שאינם בבוררות — לקוחות מקור, יורשים, וכל מי שלא מסומן 'מיוצג'/'הרצוג' במנדיי.">
+          🟩 חתומים פרטיים — לא בבוררות
+        </div>
+        <div style="font-size:1.5rem; font-weight:700; color:#10b981; line-height:1.1;" id="bucket-other-value">—</div>
+        <div style="font-size:0.72rem; color:#9ca3af; margin-top:4px;">דונם</div>
+        <div style="font-size:0.82rem; color:#10b981; margin-top:6px; font-weight:600;" id="bucket-other-pct">— %</div>
       </div>
 
     </div>
@@ -4454,20 +4464,25 @@
     };
 
     // ============================================================
-    // 📊 חישוב 5 הבאקטים (14/05/2026 — Phase B) — קלף סיכום שטח תחת ניהולנו
+    // 📊 חישוב 6 הבאקטים (18/05/2026 — פיצול private לבוררות/לא-בוררות)
     // ============================================================
     // ⚖ הבאקטים מבוססים על allocation_group_id (השכבה האופרטיבית)
     //   ולא על family_group_id (השכבה המשפטית/דמי ייזום).
     //
     //   חבר עם allocation_group_id=NULL → נופל לבאקט "חתומים פרטיים"
-    //   (גם אם הוא בקבוצה משפטית — אדמין הוציא אותו מההקצאה).
+    //   (בוררות או לא-בוררות, לפי monday_customer_type).
     //
     // הבאקטים:
     //   1. נדל"ן נדל"ן       — allocation '50ee16ff-...' (5% של כל עסקה + עסקאות מלאות)
     //   2. עודפות שותפות    — חנן מור השקעות + 4 חברות פרטיות (רכישות > 5%, כובע 2)
     //   3. דודי יצחקי        — allocation 'a990ed96-...' (עסקאות #23-24)
     //   4. עוצמה             — family שכוללת "עוצמה" בשם (141 רוכשי יחידות)
-    //   5. חתומים פרטיים     — כל השאר (NULL allocation או קבוצות אחרות)
+    //   5. בבוררות (הרצוג)   — private עם monday_customer_type 'מיוצג' / 'הרצוג'
+    //   6. לא בבוררות        — private אחר (לקוחות מקור, יורשים, ללא סיווג)
+    //
+    // 🔒 אין כפילות: בעלים שמכרו חלקית מופיעים פעם ב-signed_owners
+    //    (השטח שנשאר) ופעם ב-partnership_deals (השטח שמכרו).
+    //    בעלים שיצאו לגמרי (גולדמן/צלליכין/בן גרא/קרן מרתון) — is_active=FALSE.
     // ============================================================
     const NADLAN_GROUP_ID = '50ee16ff-4025-479d-af57-9f56d0489305';
     const DUDI_GROUP_ID   = 'a990ed96-5b11-4d1a-9db1-89c76833af8b';
@@ -4477,9 +4492,15 @@
     const otzmaFamily = families.find(f => f.family_name && f.family_name.includes('עוצמה'));
     const OTZMA_GROUP_ID = otzmaFamily ? otzmaFamily.id : null;
 
-    const buckets = { nadlan: 0, overflow: 0, dudi: 0, otzma: 0, private: 0 };
+    // 🔍 בדיקה האם בעל בבוררות הרצוג (לפיצול private ל-2 באקטים)
+    const isArbitrationOwner = (s) => {
+      const m = s.monday_customer_type || '';
+      return m.includes('מיוצג') || m.includes('הרצוג');
+    };
 
-    // שלב 1: signed_owners — לפי allocation_group_id (Phase B)
+    const buckets = { nadlan: 0, overflow: 0, dudi: 0, otzma: 0, arbitration: 0, other: 0 };
+
+    // שלב 1: signed_owners — לפי allocation_group_id
     signed.forEach(s => {
       if (!s.is_active) return;
       const parcelMeta = parcelsMetaIdx[s.parcel];
@@ -4502,17 +4523,20 @@
         buckets.otzma += eff;
       } else if (PARTNERSHIP_OVERFLOW_IDS.has(allocId)) {
         buckets.overflow += eff;
+      } else if (isArbitrationOwner(s)) {
+        // NULL allocation או קבוצה אחרת + monday_customer_type 'מיוצג'/'הרצוג' → בוררות
+        buckets.arbitration += eff;
       } else {
-        // NULL allocation_group_id או קבוצות משפחה שאינן מוזכרות → באקט פרטיים
-        buckets.private += eff;
+        // NULL allocation או קבוצה אחרת ולא בבוררות → לא-בוררות
+        buckets.other += eff;
       }
     });
 
-    // שלב 2: partnership_deals — לפי allocation_group_id (Phase B)
-    // • DUDI ו-OTZMA כבר מיוצגות ע"י signed_owners (rוkхים) — דילוג
+    // שלב 2: partnership_deals — לפי allocation_group_id
+    // • DUDI ו-OTZMA כבר מיוצגות ע"י signed_owners (רוכשים) — דילוג
     // • NADLAN: 4 החברות אינן ב-signed_owners עם שטח → להוסיף את העסקאות
     // • OVERFLOW (חנן מור השקעות + 4 חברות פרטיות): עסקאות עודף → באקט נפרד
-    // • Private: רק שאר העסקאות (אם יש כאלה ללא קבוצה מזוהה)
+    // • שאר העסקאות (NULL/אחר): נכנסות ל"לא בבוררות" — חברות, לא בני אדם בבוררות
     (allDeals || []).forEach(d => {
       if (!d.is_active) return;
       const allocId = d.allocation_group_id;
@@ -4529,12 +4553,12 @@
       } else if (PARTNERSHIP_OVERFLOW_IDS.has(allocId)) {
         buckets.overflow += eff;
       } else {
-        // עסקאות עם NULL allocation_group_id או קבוצות אחרות → באקט פרטיים
-        buckets.private += eff;
+        // עסקאות NULL/אחר → "לא בבוררות" (חברות אינן בבוררות)
+        buckets.other += eff;
       }
     });
 
-    const totalArea = buckets.nadlan + buckets.overflow + buckets.dudi + buckets.otzma + buckets.private;
+    const totalArea = buckets.nadlan + buckets.overflow + buckets.dudi + buckets.otzma + buckets.arbitration + buckets.other;
     const fmtDunam = m2 => (m2 / 1000).toLocaleString('he-IL', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
     const pct = m2 => totalArea > 0 ? ((m2 / totalArea) * 100).toFixed(1) : '0.0';
 
@@ -4551,8 +4575,10 @@
     setIf('bucket-dudi-pct', pct(buckets.dudi) + ' %');
     setIf('bucket-otzma-value', fmtDunam(buckets.otzma));
     setIf('bucket-otzma-pct', pct(buckets.otzma) + ' %');
-    setIf('bucket-private-value', fmtDunam(buckets.private));
-    setIf('bucket-private-pct', pct(buckets.private) + ' %');
+    setIf('bucket-arbitration-value', fmtDunam(buckets.arbitration));
+    setIf('bucket-arbitration-pct', pct(buckets.arbitration) + ' %');
+    setIf('bucket-other-value', fmtDunam(buckets.other));
+    setIf('bucket-other-pct', pct(buckets.other) + ' %');
     // ============================================================
 
     // קיבוץ כל הרשומות (visible + hidden) לפי id_number — שורה אחת לכל אדם
