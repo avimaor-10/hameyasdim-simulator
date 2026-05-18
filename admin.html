@@ -4736,14 +4736,19 @@
     const noFam = total - withFam;
     document.getElementById('stat-signed-total').textContent = total;
     document.getElementById('stat-signed-arbitration').textContent = arbitration;
-    document.getElementById('stat-signed-master-verified').textContent = masterVerified;
-    document.getElementById('stat-signed-no-monday').textContent = noMonday;
+    // 18/05/2026: הגנת null על קלפים שהוסרו מה-DOM — המידע מחושב אבל לא מוצג
+    const mvEl = document.getElementById('stat-signed-master-verified');
+    if (mvEl) mvEl.textContent = masterVerified;
+    const nmEl = document.getElementById('stat-signed-no-monday');
+    if (nmEl) nmEl.textContent = noMonday;
     document.getElementById('stat-signed-no-family').textContent = noFam;
-    // יחידות שותפות (אגרגטיבי, לא מציגים פירוט)
+    // יחידות שותפות (אגרגטיבי, לא מציגים פירוט) — קלף הוסר מה-DOM ב-18/05/2026
     const pu = signedListAggregateStats;
     const areaFmt = pu.partnership_units_area ? Math.round(pu.partnership_units_area).toLocaleString('he-IL') + ' מ"ר' : '0 מ"ר';
-    document.getElementById('stat-signed-partnership-units').innerHTML =
-      `${pu.partnership_units_count}<div style="font-size:0.7rem;color:#6b7280;margin-top:4px;">${areaFmt}</div>`;
+    const puEl = document.getElementById('stat-signed-partnership-units');
+    if (puEl) {
+      puEl.innerHTML = `${pu.partnership_units_count}<div style="font-size:0.7rem;color:#6b7280;margin-top:4px;">${areaFmt}</div>`;
+    }
 
     // 📐 חישוב שטח חתום (טאבו) + שטח לאיחוד (אחרי מקדם השתתפות)
     let totalSignedArea = 0;
