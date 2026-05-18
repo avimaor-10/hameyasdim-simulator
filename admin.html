@@ -1167,14 +1167,8 @@
       <div class="label">🏢 רוכשי יחידות שותפות</div>
       <div class="value" id="stat-signed-partnership-units" style="font-size:1.2rem;">-</div>
     </div>
-    <div class="stat-card" style="background:#f0fdf4;border-color:#16a34a;" title="סך השטח הרשום בטאבו של כל החתומים הפעילים — לפני מקדם השתתפות.">
-      <div class="label">📐 שטח חתום (טאבו)</div>
-      <div class="value" id="stat-signed-total-area" style="font-size:1.2rem;color:#16a34a;">-</div>
-    </div>
-    <div class="stat-card gold" title="השטח שבאמת נכנס לאיחוד וחלוקה — אחרי מקדם השתתפות של כל חלקה. זה הבסיס לחישוב ההקצאה במצב היוצא.">
-      <div class="label">🎯 שטח לאיחוד וחלוקה</div>
-      <div class="value" id="stat-signed-unification-area" style="font-size:1.2rem;">-</div>
-    </div>
+    <!-- 18/05/2026: 2 קלפים הוסרו ("שטח חתום (טאבו)" + "שטח לאיחוד וחלוקה")
+         כי הוצגו מספרים סותרים את 6 הבאקטים שלמעלה. הנתון הסופי הוא בבאקטים. -->
   </div>
 
   <div class="filters-bar" style="flex-wrap:wrap;">
@@ -5064,23 +5058,10 @@
         `;
       };
 
-      // סטטיסטיקה כללית בראש המסך
-      let html = `
-        <div style="background:linear-gradient(135deg,#eef2ff 0%,#fdf4ff 100%);border:1px solid #c7d2fe;border-radius:10px;padding:14px 18px;margin-bottom:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
-            <div style="font-weight:700;font-size:1rem;color:#3730a3;">📊 סיכום מצרפי של כל בעלי הקרקע במערכת</div>
-            <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.9rem;">
-              <span title="כל בעלי קרקע במערכת — יחידים וחברות"><strong style="color:#3730a3;">👥 ${allMembersCount}</strong> בעלים</span>
-              <span title="כל קבוצות המשפחה / שיבוץ במערכת"><strong style="color:#3730a3;">📂 ${allGroups.length}</strong> קבוצות</span>
-              <span title="סך השטח הרשום בטאבו (מ&quot;ר)"><strong style="color:#1e40af;">📋 ${fmt(allRegisteredArea)}</strong> מ"ר רשום</span>
-              <span title="סך השטח הנכנס לאיחוד וחלוקה אחרי מקדם השמאי"><strong style="color:#16a34a;">📐 ${fmt(allEffectiveArea)}</strong> מ"ר לאיחוד</span>
-            </div>
-          </div>
-          <div style="font-size:0.78rem;color:#6b7280;margin-top:6px;">
-            💡 לחיצה על "הצג פירוט פנימי" של קבוצה תפתח טבלה עם כל החברים, ממוינים לפי שטח מהגדול לקטן
-          </div>
-        </div>
-      `;
+      // 18/05/2026: הקלף של "סיכום מצרפי" הוסר — הציג מספרים שסותרים
+      // את 6 הבאקטים שלמעלה (296,851 מ"ר רשום / 282,489 מ"ר לאיחוד מול 341.4 דונם).
+      // הנתון הסופי לאיחוד וחלוקה הוא בבאקטים, לא כאן.
+      let html = ``;
 
       // כל הקבוצות יחד (מעורבבות לפי שטח), עיצוב אחיד
       if (allGroups.length > 0) {
